@@ -3,6 +3,10 @@
     "version": "1.0",
     "build": {
         "srcDir": "src",
-        "includeDir": "include"
+        "includeDir": "include",
+        "srcFilter": [
+            "+<fw_uart.c>",
+            "+<fw_util.c>"
+        ]
     }
 }

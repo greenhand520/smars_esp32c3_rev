@@ -9,10 +9,11 @@
 #define PWM_UG_A()  SFRX_SET(PWMA_EGR, 0)
 #define PWM_UG_B()  SFRX_SET(PWMB_EGR, 0)
 
-static uint16_t req_freq[2];    /* 请求频率（Hz），0 = 该组恒低 */
-static uint16_t req_duty[PWM_CH_COUNT]; /* 请求占空比 0..10000 */
-static uint16_t cur_arr[2];     /* 换算得到的 ARR（占空比量化用） */
-static uint8_t  out_pwm[PWM_CH_COUNT];  /* 1 = 输出 PWM，0 = 强制恒低 */
+/* 大数组放 XDATA，避免 SDCC 局部变量静态叠放占满仅 128B 的 DATA 区 */
+static __xdata uint16_t req_freq[2];    /* 请求频率（Hz），0 = 该组恒低 */
+static __xdata uint16_t req_duty[PWM_CH_COUNT]; /* 请求占空比 0..10000 */
+static __xdata uint16_t cur_arr[2];     /* 换算得到的 ARR（占空比量化用） */
+static __xdata uint8_t  out_pwm[PWM_CH_COUNT];  /* 1 = 输出 PWM，0 = 强制恒低 */
 static uint8_t  estop_latched;
 static uint8_t  configured;
 
