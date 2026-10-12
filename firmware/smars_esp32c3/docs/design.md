@@ -92,6 +92,9 @@ firmware/smars_esp32c3/
 - 页面标题与状态栏显示机器人名字（§8）。
 - **WiFi 设置区**（AP+STA 可切换）：显示当前模式/IP；STA 模式下填 SSID/密码（存 NVS，重启后自动连接）；
   连接失败 15 s 回落 AP 热点（网页提示"STA 失败，已回落 AP"）；可一键清除 STA 配置。
+- IP 发现：AP 模式固定 `http://192.168.4.1/`；STA 模式 IP 由路由器分配（页面状态栏/路由器列表查看）。
+  mDNS（`smars-<name>.local`）未实现——mdns 是 ESP-IDF 托管组件，esp-idf-sys 默认构建不含该组件，
+  收益（省一次查路由器）不抵组件接入成本；如需可后补 `ESP_IDF_COMPONENTS` 方案。
 
 ## 7. 安全设计
 
@@ -105,7 +108,7 @@ firmware/smars_esp32c3/
 
 ## 8. 命名与 feature 方案（已定：方案 A）
 
-- 每台一个 feature `robot-<name>`，隐含配置；`NAME` 常量编译进固件（热点名 `SMARS-<NAME>`、mDNS `smars-<name>.local`、网页标题同名）。
+- 每台一个 feature `robot-<name>`，隐含配置；`NAME` 常量编译进固件（热点名 `SMARS-<NAME>`、网页标题同名）。
 - 占位名（后可改）与配置对应：
 
 | feature | 名字 | 配置 |
@@ -131,6 +134,19 @@ firmware/smars_esp32c3/
 | 目标 `riscv32imc-esp-espidf` 为 tier-3 无预编译 std | nightly + `build-std`（`.cargo/config.toml`） |
 
 WS2812 用 `rmt-legacy` API（新 RMT API 需自定义编码器，收益低）；一次性 ADC 用 `adc-oneshot-legacy`。两者均为有意的弃用告警。
+
+### 9.2 网页验证记录（浏览器实测）
+
+按配置注入 `window.SMARS_CONFIG` 后逐项验证（Chromium 加载，JS 全量执行无异常）：
+
+| 配置 | 舵机滑条 | 超声波 | 升降 | 其他 |
+|---|---|---|---|---|
+| bolt（basic） | 无 | ✓ | 无 | 驾驶盘/急停/WiFi 区齐全 |
+| fork（gripper） | 2 条（0~90 上下、0~90 夹持） | 无 | 无 | 同上 |
+| lift（forklift） | 1 条（0~60） | 无 | ✓ | 同上 |
+| scan（sonar turret） | 1 条（-60~60 云台） | ✓ | 无 | 同上 |
+
+离线容错：无 /status 服务时链路徽标显示"离线"，页面不崩溃。
 
 ```bash
 cargo test                                             # host：smars-protocol + 纯逻辑单测
