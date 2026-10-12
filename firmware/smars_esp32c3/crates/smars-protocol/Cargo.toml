@@ -1,0 +1,9 @@
+[package]
+name = "smars-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "STC8H1K08 八路 PWM 控制器串口协议 v2 编解码（主机端）"
+publish = false
+
+[dependencies]

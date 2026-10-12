@@ -66,6 +66,7 @@ firmware/smars_esp32c3/
 │       ├── src/
 │       │   ├── main.rs     # 装配：WiFi + HTTP + 任务
 │       │   ├── config.rs   # feature 选择：NAME/配置矩阵/舵机限位/电池系数（compile_error! 保证唯一）
+│       │   ├── wifi.rs     # AP/STA 模式切换 + NVS 存储 WiFi 凭据 + STA 失败回落 AP
 │       │   ├── stc_link.rs # UART0 + 请求/应答 + 超时重试 + 链路状态
 │       │   ├── drive.rs    # 差速混控 + 斜坡 + 失联停车
 │       │   ├── servo.rs    # LEDC 50Hz 角度↔脉宽（含上电缓动）
@@ -89,6 +90,8 @@ firmware/smars_esp32c3/
 - 遥测：`GET /status` 每 500 ms 轮询——电池电压/电量%、距离 cm（含超时状态）、舵机当前角度、链路/急停状态。
 - 急停按钮（始终可见）→ `POST /cmd {"estop":1}`；恢复按钮。
 - 页面标题与状态栏显示机器人名字（§8）。
+- **WiFi 设置区**（AP+STA 可切换）：显示当前模式/IP；STA 模式下填 SSID/密码（存 NVS，重启后自动连接）；
+  连接失败 15 s 回落 AP 热点（网页提示"STA 失败，已回落 AP"）；可一键清除 STA 配置。
 
 ## 7. 安全设计
 
@@ -100,11 +103,20 @@ firmware/smars_esp32c3/
 | 急停 | `0x04` 锁存（STC 侧恒低），网页明确显示"已急停"，需手动恢复 |
 | 升降按钮 | 按住式（松开即停），单次按压超时 3 s 自动停 |
 
-## 8. 命名与 feature 方案*
+## 8. 命名与 feature 方案（已定：方案 A）
 
-- 方案 A（推荐）：每台一个 feature `robot-<name>`，隐含配置；`NAME` 常量编译进固件（热点名 `SMARS-<NAME>`、mDNS、网页标题同名）。
-- 方案 B：`--features config-loader` 选配置，名字经 `SMARS_NAME` 环境变量（build.rs）注入。
-- 两者都用 `compile_error!` 保证恰好启用一个机器人/配置 feature；具体名字见 §10-Q4。
+- 每台一个 feature `robot-<name>`，隐含配置；`NAME` 常量编译进固件（热点名 `SMARS-<NAME>`、mDNS `smars-<name>.local`、网页标题同名）。
+- 占位名（后可改）与配置对应：
+
+| feature | 名字 | 配置 |
+|---|---|---|
+| `robot-bolt` | bolt | config-basic |
+| `robot-fork` | fork | config-gripper |
+| `robot-cargo` | cargo | config-loader |
+| `robot-lift` | lift | config-forklift |
+| `robot-scan` | scan | config-sonar |
+
+- `compile_error!` 保证恰好启用一个机器人 feature。
 
 ## 9. 构建与提交计划
 
@@ -123,10 +135,12 @@ cargo run  --release --features robot-<name>            # espflash 烧录 + 监�
 5. 网页遥控器（全部配置 UI + feature 切换）
 6. 全 feature 构建矩阵验证 + 文档定稿
 
-## 10. 待确认问题
+## 10. 已确认决策（2026-10-12 评审）
 
-- **Q1 WiFi 模式**：softAP（推荐：机器人热点 `SMARS-<NAME>`，手机直连 `http://192.168.4.1/`，室外可用）／STA（加入家庭 WiFi，路由器分配 IP）／AP+STA 可切换。
-- **Q2 配置 1 的超声波**："安装一个超声波模块转动"——是固定安装只显示距离，还是需要转动（但配置 5 才有云台舵机）？另：配置 1 是否也需要显示距离（需求 1 说"如果连接超声波模块"）。
-- **Q3 STC 8 路 PWM 接线映射**：§4 建议表（CH0-3 = 左/右电机组，CH4-7 可选第二块 DRV8833 或 RZ7888 升降）是否与实际接线一致？叉车配置升降用 CH4/CH5 是否正确？
-- **Q4 命名与方案**：采用方案 A 还是 B？5 台机器人的名字是什么（请提供；或先用占位名 bolt/cargo/fork/lift/scan 后改）？
-- **Q5 电池分压**：BAT_ADC 前端分压比是多少（如 2:1 → 系数 2.0）？1S 3.0~4.2V 超出 ADC 量程，需要硬件分压；另有无已知校准偏差？
+| 问题 | 决策 |
+|---|---|
+| Q1 WiFi 模式 | **AP+STA 可切换**：默认 AP 热点 `SMARS-<NAME>`；网页可配 STA（凭据存 NVS），失败 15 s 回落 AP |
+| Q2 配置 1 超声波 | **固定安装，只显示距离**；云台转动仅配置 5 |
+| Q3 STC 通道映射 | **按 §4 建议表**：CH0/1 左电机组、CH2/3 右电机组、CH4/5=第二块 DRV8833 A 或 RZ7888 升降、CH6/7=B/备用 |
+| Q4 命名与 feature | **方案 A**：每台一个 feature，占位名 bolt/fork/cargo/lift/scan（§8） |
+| Q5 电池分压 | **2:1，系数 2.0**，软件留校准微调位 |

@@ -1,0 +1,28 @@
+[package]
+name = "smars-esp32c3"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SMARS 小车主控固件：WiFi 网页遥控 + STC8H1K08 八路 PWM"
+publish = false
+
+[[bin]]
+name = "smars-esp32c3"
+path = "src/main.rs"
+harness = false # 不用内置 cargo test 测试框架（嵌入式目标）
+
+# 目标: riscv32imc-esp-espidf（ESP32-C3, std / esp-idf-svc）
+# host 上仅可解析依赖，无法编译；构建方法见 README.md。
+[dependencies]
+esp-idf-svc = "0.53"
+esp-idf-sys = "0.38"
+log = "0.4"
+smars-protocol = { workspace = true }
+
+[features]
+# 机器人 feature：恰好启用一个（NAME/配置矩阵由此确定），见 docs/design.md §8
+robot-bolt = []
+robot-fork = []
+robot-cargo = []
+robot-lift = []
+robot-scan = []
