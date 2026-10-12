@@ -193,7 +193,9 @@ ARR = N - 1
 
 - PlatformIO：`platform = intel_mcs51`（已安装），板型基于 `STC8H1K28.json` 覆盖为 STC8H1K08 参数（8 KB code / 1 KB XRAM），`build_flags` 传 `__CONF_FOSC`/`__CONF_MCU_MODEL`；烧录 stcgal（`stc8` 协议）走 P3.0/P3.1。
 - **时钟约定**：stcgal/STC-ISP 下载时把 IRC 设为目标频率（stcgal `-t <kHz>`），固件只清 `CLKDIV`、不动微调寄存器（§4.5）。`__CONF_FOSC` 与 ISP 设定必须一致。
-- FwLib_STC8 vendored 至 `lib/FwLib_STC8/`（上游 gitee `iosetting/fw-lib_-stc8` @9dce329，Apache-2.0，含 LICENSE）。偏离库惯例之处：不用 `SYS_SetClock()`（其无条件写 IRC 微调寄存器，违反数据手册 §6.2 警告），自建最小时钟初始化，理由注释于代码。
+- FwLib_STC8 vendored 至 `lib/FwLib_STC8/`（上游 gitee `iosetting/fw-lib_-stc8` @9dce329，Apache-2.0，含 LICENSE）。偏离库惯例之处：
+  1. 不用 `SYS_SetClock()`（其无条件写 IRC 微调寄存器，违反数据手册 §6.2 警告），自建最小时钟初始化，理由注释于代码；
+  2. `library.json` 的 `srcFilter` 仅编译 `fw_uart.c`/`fw_util.c`（其余模块只用头文件宏）——避免未用函数的参数区撑爆 128B 的 DATA 区，也省代码空间。
 - 阶段提交：
   1. 本文档（设计+协议+疑问）
   2. 工程骨架 + FwLib 集成 + 空主循环编译通过
