@@ -50,4 +50,14 @@ static uint16_t pwm_math_ccr(uint16_t duty, uint16_t arr)
     return (uint16_t)((duty * n + 5000UL) / 10000UL);
 }
 
+/*
+ * CCR 计数值 → 实际输出占空比（0..10000，四舍五入）。
+ * 量化回读用：实际步进 = 1/(ARR+1)，与 pwm_math_ccr 构成往返。
+ */
+static uint16_t pwm_math_actual_duty(uint16_t ccr, uint16_t arr)
+{
+    uint32_t n = (uint32_t)arr + 1UL;
+    return (uint16_t)((ccr * 10000UL + n / 2UL) / n);
+}
+
 #endif

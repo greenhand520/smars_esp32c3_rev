@@ -64,7 +64,7 @@ uint8_t proto_crc8(const uint8_t *data, uint8_t len);
 
 /*
  * 构造应答帧写入 buf，buf 需容纳 6 + data_len 字节
- * （状态查询应答最长 27 字节）。返回帧总长度。
+ * （状态查询应答最长 31 字节）。返回帧总长度。
  */
 uint8_t proto_build_resp(uint8_t *buf, uint8_t cmd, uint8_t status,
                          const uint8_t *data, uint8_t data_len);

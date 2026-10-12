@@ -16,9 +16,9 @@ STC8H1K08 通过 UART1 接收主控 MCU 命令，输出 8 路 PWM（PWMA×4 + PW
 | LED 初始化指示 | P1.1 | 初始化完成后恒高 |
 | LED PWM 已配置指示 | P1.3 | 设置命令成功后高，急停后低 |
 
-上电默认 8 路输出恒低。协议命令：`0x01` 全量设置（2 组频率+8 占空比）、`0x02` 单通道占空比、
-`0x03` 全量占空比、`0x04` 急停（锁存）、`0x05` 恢复、`0x06` 状态查询、`0x07` 版本查询；
-每命令均有 ACK/NACK 应答。帧格式与 CRC8 测试向量见 docs/design.md §4。
+上电默认 8 路输出恒低。协议命令（版本 2）：`0x01` 全量设置（2 组频率+8 占空比）、`0x02` 单通道占空比、
+`0x03` 全量占空比、`0x04` 急停（锁存）、`0x05` 恢复、`0x06` 状态查询（回读量化后的实际占空比/实际频率/每组分辨率）、
+`0x07` 版本查询；每命令均有 ACK/NACK 应答。帧格式与 CRC8 测试向量见 docs/design.md §4。
 
 ## 构建与烧录
 
@@ -39,7 +39,7 @@ pio run -t upload            # stcgal 烧录（P3.0/P3.1 ISP）
 make -C test/host test       # 协议解析 + PWM 换算主机端单元测试（gcc）
 ```
 
-已验证：主机端单测全部通过、固件编译通过（Flash 6843/8192 B、XRAM 219/1024 B）。
+已验证：主机端单测全部通过、固件编译通过（Flash 6757/8192 B、XRAM 235/1024 B）。
 尚未验证：目标硬件实测（无硬件环境），上电步骤按 docs/design.md §9 清单执行。
 
 ## 目录
@@ -47,7 +47,7 @@ make -C test/host test       # 协议解析 + PWM 换算主机端单元测试（
 ```
 src/          main（命令分发）/ uart_io（收发+1ms 时间基）/ protocol（帧+CRC8）/ pwm_ctrl / pwm_math
 lib/          FwLib_STC8（vendored，Apache-2.0，上游 fw-lib_-stc8 @9dce329）
-              —— srcFilter 仅编译 fw_uart.c/fw_util.c，其余头文件宏直接使用
+              —— srcFilter 不编译库源码，全部使用头文件宏 API（UART1/Timer0 初始化宏直配）
 test/host/    主机端单元测试（test_protocol、test_pwm_math）
 docs/         设计文档
 ```

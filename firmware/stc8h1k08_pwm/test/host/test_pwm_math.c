@@ -76,7 +76,6 @@ static void test_ccr(void)
     CHECK(pwm_math_ccr(10000, 336) == 337);      /* = ARR+1，恒高 */
     CHECK(pwm_math_ccr(5000, 9999) == 5000);
     CHECK(pwm_math_ccr(5000, 336) == 169);       /* round(0.5*337) = 168.5 → 169 */
-
     /* 单调不减 + 不超过 ARR+1 */
     {
         uint32_t arr;
@@ -95,11 +94,37 @@ static void test_ccr(void)
     }
 }
 
+static void test_actual_duty(void)
+{
+    /* 已知用例：65535Hz（ARR=336）请求 50.00% → CCR=169 → 实际 50.15% */
+    CHECK(pwm_math_actual_duty(pwm_math_ccr(5000, 336), 336) == 5015);
+    CHECK(pwm_math_actual_duty(0, 9999) == 0);
+    CHECK(pwm_math_actual_duty(10000, 9999) == 10000);
+
+    /* 往返：请求 → CCR → 实际占空比，误差 ≤ 半个量化步（含取整余量） */
+    {
+        uint32_t arr;
+        for (arr = 2; arr <= 65535UL; arr += 97)
+        {
+            uint32_t n = arr + 1;
+            uint32_t bound = (5000UL + n / 2UL) / n + 1UL;
+            uint16_t d;
+            for (d = 0; d <= PWM_MATH_DUTY_MAX; d += 137)
+            {
+                uint16_t actual = pwm_math_actual_duty(pwm_math_ccr(d, (uint16_t)arr), (uint16_t)arr);
+                uint32_t diff = (actual > d) ? (uint32_t)(actual - d) : (uint32_t)(d - actual);
+                CHECK(diff <= bound);
+            }
+        }
+    }
+}
+
 int main(void)
 {
     test_known_cases();
     test_freq_sweep();
     test_ccr();
+    test_actual_duty();
 
     if (failures)
     {

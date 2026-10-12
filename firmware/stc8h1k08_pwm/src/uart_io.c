@@ -4,6 +4,9 @@
 #define RX_RING_SIZE 64
 #define RX_RING_MASK (RX_RING_SIZE - 1)
 
+/* 波特率（协议 §4.5） */
+#define UART_BAUD 115200UL
+
 /* 环形缓冲放 XDATA，节省仅 128B 的 DATA 区 */
 static __xdata uint8_t rx_ring[RX_RING_SIZE];
 static volatile uint8_t rx_head;
@@ -29,6 +32,13 @@ void tick_init(void)
 
 void uart_io_init(void)
 {
+    /*
+     * UART1 8N1，波特率源 Timer2 1T 模式，重载值 = 65536 - SYSCLK/(4*波特率)
+     * （与 FwLib UART1_Config8bitUart 相同的寄存器操作，用头文件宏直接配置，
+     * 不链接库源码——其 .c 辅助函数的参数区会撑爆 128B 的 DATA 区）。
+     */
+    uint16_t reload = (uint16_t)(65536UL - (__SYSCLOCK / (4UL * UART_BAUD)));
+
     rx_head = 0;
     rx_tail = 0;
 
@@ -36,8 +46,12 @@ void uart_io_init(void)
     GPIO_P3_SetMode(GPIO_Pin_6, GPIO_Mode_Input_HIP);
     GPIO_P3_SetMode(GPIO_Pin_7, GPIO_Mode_Output_PP);
 
-    /* 8N1，波特率源 Timer2 1T 模式 */
-    UART1_Config8bitUart(UART1_BaudSource_Timer2, HAL_State_ON, 115200);
+    SM0 = 0;
+    SM1 = 1;
+    UART1_SetBaudSource(UART1_BaudSource_Timer2);
+    TIM_Timer2_Set1TMode(HAL_State_ON);
+    TIM_Timer2_SetInitValue((uint8_t)(reload >> 8), (uint8_t)reload);
+    TIM_Timer2_SetRunState(HAL_State_ON);
     UART1_SwitchPort(UART1_AlterPort_P36_P37);
     UART1_SetRxState(HAL_State_ON);
     ES = 1;

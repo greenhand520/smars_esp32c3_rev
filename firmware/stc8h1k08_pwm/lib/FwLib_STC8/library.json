@@ -5,8 +5,7 @@
         "srcDir": "src",
         "includeDir": "include",
         "srcFilter": [
-            "+<fw_uart.c>",
-            "+<fw_util.c>"
+            "-<*>"
         ]
     }
 }

@@ -8,16 +8,16 @@
 #include "pwm_ctrl.h"
 #include "uart_io.h"
 
-#define FW_PROTO_VER 1
+#define FW_PROTO_VER 2
 #define FW_MAJOR    1
-#define FW_MINOR    0
+#define FW_MINOR    1
 
 /* 解析器与批量缓冲放 XDATA，节省仅 128B 的 DATA 区（SDCC 局部变量静态叠放） */
 static __xdata proto_parser_t parser;
-static __xdata uint8_t resp_buf[27];   /* 应答最长 6 + 21 */
-static __xdata uint8_t qdata[21];      /* 查询应答数据区 */
+static __xdata uint8_t resp_buf[31];   /* 应答最长 6 + 25 */
+static __xdata uint8_t qdata[25];      /* 查询应答数据区 */
 static __xdata uint16_t duty_buf[PWM_CH_COUNT];
-static __xdata pwm_state_t qstate;
+static __xdata pwm_actual_t qactual;
 
 static uint16_t rd_u16(const uint8_t *p)
 {
@@ -111,19 +111,23 @@ static void dispatch(void)
         break;
     }
 
-    case PROTO_CMD_QUERY: /* 回读：flags + fA + fB + 8 x 占空比 */
+    case PROTO_CMD_QUERY: /* 回读实际生效值：flags + fA/fB 实际频率 + NA/NB 分辨率 + 8 x 实际占空比 */
     {
         uint8_t i;
 
         if (len != 0) { send_resp(cmd, PROTO_ST_LEN, 0, 0); break; }
-        pwm_get_state(&qstate);
+        pwm_get_actual(&qactual);
         qdata[0] = (uint8_t)((pwm_estop_active() ? 0x01 : 0x00) |
-                             (pwm_configured() ? 0x02 : 0x00));
-        wr_u16(&qdata[1], qstate.freq_a);
-        wr_u16(&qdata[3], qstate.freq_b);
+                             (pwm_configured() ? 0x02 : 0x00) |
+                             (qactual.freq_a ? 0x04 : 0x00) |
+                             (qactual.freq_b ? 0x08 : 0x00));
+        wr_u16(&qdata[1], qactual.freq_a);
+        wr_u16(&qdata[3], qactual.freq_b);
+        wr_u16(&qdata[5], qactual.n_a);
+        wr_u16(&qdata[7], qactual.n_b);
         for (i = 0; i < PWM_CH_COUNT; i++)
-            wr_u16(&qdata[5 + i * 2], qstate.duty[i]);
-        send_resp(cmd, PROTO_ST_OK, qdata, 21);
+            wr_u16(&qdata[9 + i * 2], qactual.duty[i]);
+        send_resp(cmd, PROTO_ST_OK, qdata, 25);
         break;
     }
 

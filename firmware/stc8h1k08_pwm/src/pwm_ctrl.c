@@ -12,8 +12,10 @@
 /* 大数组放 XDATA，避免 SDCC 局部变量静态叠放占满仅 128B 的 DATA 区 */
 static __xdata uint16_t req_freq[2];    /* 请求频率（Hz），0 = 该组恒低 */
 static __xdata uint16_t req_duty[PWM_CH_COUNT]; /* 请求占空比 0..10000 */
+static __xdata uint16_t cur_pscr[2];    /* 换算得到的 PSCR */
 static __xdata uint16_t cur_arr[2];     /* 换算得到的 ARR（占空比量化用） */
 static __xdata uint8_t  out_pwm[PWM_CH_COUNT];  /* 1 = 输出 PWM，0 = 强制恒低 */
+static uint8_t  freq_set[2];            /* 该组是否已设过非 0 频率 */
 static uint8_t  estop_latched;
 static uint8_t  configured;
 
@@ -74,7 +76,9 @@ static void apply_group_freq(uint8_t group, uint16_t freq)
     if (freq == 0)
         return;
     pwm_math_freq((uint32_t)__SYSCLOCK, freq, &pscr, &arr);
+    cur_pscr[group] = pscr;
     cur_arr[group] = arr;
+    freq_set[group] = 1;
     if (group == GROUP_A)
     {
         PWMA_SetPrescaler(pscr);
@@ -185,8 +189,12 @@ void pwm_init(void)
     req_freq[GROUP_B] = 0;
     for (ch = 0; ch < PWM_CH_COUNT; ch++)
         req_duty[ch] = 0;
+    cur_pscr[GROUP_A] = 0;
+    cur_pscr[GROUP_B] = 0;
     cur_arr[GROUP_A] = 0;
     cur_arr[GROUP_B] = 0;
+    freq_set[GROUP_A] = 0;
+    freq_set[GROUP_B] = 0;
     estop_latched = 0;
     configured = 0;
 }
@@ -270,14 +278,54 @@ void pwm_resume(void)
         apply_channel(ch); /* 按保存的配置还原 */
 }
 
-void pwm_get_state(pwm_state_t *out)
+void pwm_get_actual(pwm_actual_t *out)
 {
-    uint8_t ch;
+    uint8_t ch, group;
+    uint8_t running;
 
-    out->freq_a = req_freq[GROUP_A];
-    out->freq_b = req_freq[GROUP_B];
+    for (group = 0; group < 2; group++)
+    {
+        /* 输出实际在跑当且仅当：未急停、该组频率非 0、且换算参数已就绪 */
+        running = (!estop_latched) && (req_freq[group] != 0) && freq_set[group];
+        if (running)
+        {
+            uint32_t period = ((uint32_t)cur_pscr[group] + 1UL) *
+                              ((uint32_t)cur_arr[group] + 1UL);
+            uint16_t n = (uint16_t)(cur_arr[group] + 1);
+            if (group == 0)
+            {
+                out->freq_a = (uint16_t)(__SYSCLOCK / period);
+                out->n_a = n;
+            }
+            else
+            {
+                out->freq_b = (uint16_t)(__SYSCLOCK / period);
+                out->n_b = n;
+            }
+        }
+        else
+        {
+            if (group == 0)
+            {
+                out->freq_a = 0;
+                out->n_a = freq_set[group] ? (uint16_t)(cur_arr[group] + 1) : 0;
+            }
+            else
+            {
+                out->freq_b = 0;
+                out->n_b = freq_set[group] ? (uint16_t)(cur_arr[group] + 1) : 0;
+            }
+        }
+    }
+    /* 各路实际占空比：由 CCR/ARR 反算（恒低 = 0） */
     for (ch = 0; ch < PWM_CH_COUNT; ch++)
-        out->duty[ch] = req_duty[ch];
+    {
+        running = (!estop_latched) && (req_freq[ch >> 2] != 0) && freq_set[ch >> 2];
+        out->duty[ch] = running
+            ? pwm_math_actual_duty(pwm_math_ccr(req_duty[ch], cur_arr[ch >> 2]),
+                                   cur_arr[ch >> 2])
+            : 0;
+    }
 }
 
 uint8_t pwm_estop_active(void)

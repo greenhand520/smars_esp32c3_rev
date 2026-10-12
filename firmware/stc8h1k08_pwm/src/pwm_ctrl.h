@@ -16,10 +16,12 @@
 
 typedef struct
 {
-    uint16_t freq_a;                  /* A 组（CH0-3）请求频率 Hz，0 = 恒低 */
-    uint16_t freq_b;                  /* B 组（CH4-7）请求频率 Hz，0 = 恒低 */
-    uint16_t duty[PWM_CH_COUNT];      /* 请求占空比 0..10000 */
-} pwm_state_t;
+    uint16_t freq_a;                  /* A 组实际输出频率 Hz（向下取整），0 = 停 */
+    uint16_t freq_b;                  /* B 组实际输出频率 Hz（向下取整），0 = 停 */
+    uint16_t n_a;                     /* A 组每周期计数步 ARR+1（占空比步进 1/n_a），0 = 未配置 */
+    uint16_t n_b;                     /* B 组每周期计数步 ARR+1（占空比步进 1/n_b），0 = 未配置 */
+    uint16_t duty[PWM_CH_COUNT];      /* 实际输出占空比 0..10000（量化后） */
+} pwm_actual_t;
 
 /* 初始化引脚与 PWM 定时器，上电默认 8 路恒低 */
 void pwm_init(void);
@@ -33,7 +35,8 @@ uint8_t pwm_set_duties(const uint16_t *duty);
 void pwm_estop(void);
 void pwm_resume(void);
 
-void pwm_get_state(pwm_state_t *out);
+/* 回读实际生效值（含量化后占空比、每组分辨率、实际频率） */
+void pwm_get_actual(pwm_actual_t *out);
 uint8_t pwm_estop_active(void);
 uint8_t pwm_configured(void);
 
