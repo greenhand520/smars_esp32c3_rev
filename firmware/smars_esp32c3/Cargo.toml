@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
-members = ["crates/smars-protocol", "crates/smars_esp32c3"]
+members = ["crates/smars-protocol", "crates/smars-core", "crates/smars_esp32c3"]
 # host 上只默认测试纯 Rust crate；固件 crate 仅用 Espressif 工具链按目标构建（README）
-default-members = ["crates/smars-protocol"]
+default-members = ["crates/smars-protocol", "crates/smars-core"]
 
 [workspace.package]
 version = "0.1.0"

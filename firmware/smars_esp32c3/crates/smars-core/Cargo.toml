@@ -1,0 +1,9 @@
+[package]
+name = "smars-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SMARS 机器人模型层：差速混控/舵机映射/电池换算/超声波换算（纯逻辑，host 可测）"
+publish = false
+
+[dependencies]
