@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>SMARS 遥控</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: #14171c; color: #e8eaed; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #1d2229; }
+  h1 { font-size: 18px; margin: 0; }
+  .badges { display: flex; gap: 8px; font-size: 13px; }
+  .badge { padding: 3px 9px; border-radius: 999px; background: #2a313a; }
+  .badge.warn { background: #7a4b00; }
+  .badge.err { background: #8b1e1e; }
+  .badge.ok { background: #1d5c2e; }
+  section { padding: 12px 14px; border-bottom: 1px solid #262c34; }
+  h2 { font-size: 13px; margin: 0 0 10px; color: #9aa4b0; font-weight: 600; }
+  .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 320px; margin: 0 auto; }
+  button {
+    font-size: 20px; padding: 18px 0; border: 0; border-radius: 12px;
+    background: #2b3947; color: #fff; touch-action: none; user-select: none; cursor: pointer;
+  }
+  button:active { background: #3d6ea8; }
+  button.stop { background: #5c2b2b; }
+  button.estop { background: #8b1e1e; font-size: 16px; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .row > * { flex: 1; }
+  input[type=text], input[type=password] {
+    width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #3a434e; background: #20262e; color: #fff;
+  }
+  input[type=range] { width: 100%; }
+  .slider-label { display: flex; justify-content: space-between; font-size: 13px; color: #9aa4b0; margin-bottom: 4px; }
+  .big { font-size: 26px; font-weight: 700; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="robotName">SMARS</h1>
+  <div class="badges">
+    <span class="badge" id="batteryBadge">--</span>
+    <span class="badge" id="linkBadge">离线</span>
+    <span class="badge err hidden" id="estopBadge">急停</span>
+  </div>
+</header>
+
+<section id="sonarPanel">
+  <h2>超声波测距</h2>
+  <div class="big"><span id="sonarCm">--</span> cm</div>
+</section>
+
+<section>
+  <h2>驾驶</h2>
+  <div class="pad">
+    <span></span>
+    <button data-drive="fwd">▲</button>
+    <span></span>
+    <button data-drive="left">◀</button>
+    <button data-drive="stop" class="stop">■</button>
+    <button data-drive="right">▶</button>
+    <span></span>
+    <button data-drive="back">▼</button>
+    <span></span>
+  </div>
+  <div style="margin-top:12px">
+    <button class="estop" id="estopBtn" style="width:100%">急停</button>
+  </div>
+</section>
+
+<section id="servoPanel">
+  <h2>舵机</h2>
+  <div id="servoList"></div>
+</section>
+
+<section id="liftPanel">
+  <h2>升降</h2>
+  <div class="row">
+    <button data-lift="1">▲ 升</button>
+    <button data-lift="-1">▼ 降</button>
+  </div>
+</section>
+
+<section>
+  <h2>WiFi 设置</h2>
+  <div class="row" style="margin-bottom:8px">
+    <input type="text" id="wifiSsid" placeholder="SSID">
+  </div>
+  <div class="row" style="margin-bottom:8px">
+    <input type="password" id="wifiPass" placeholder="密码">
+  </div>
+  <div class="row">
+    <button id="wifiSave" style="font-size:14px">保存并重启</button>
+    <button id="wifiClear" style="font-size:14px">清除（回热点）</button>
+  </div>
+  <div style="font-size:12px;color:#9aa4b0;margin-top:8px" id="wifiInfo"></div>
+</section>
+
+<script>
+"use strict";
+const CFG = __SMARS_CONFIG__;
+
+const $ = (id) => document.getElementById(id);
+$("robotName").textContent = "SMARS-" + CFG.name;
+if (!CFG.hasSonar) $("sonarPanel").classList.add("hidden");
+if (!CFG.hasLift) $("liftPanel").classList.add("hidden");
+if (CFG.servos.length === 0) $("servoPanel").classList.add("hidden");
+$("wifiInfo").textContent = `当前模式：${CFG.mode === "ap" ? "热点" : "STA"}，IP ${CFG.ip}`;
+
+const DRIVE = 6000, TURN = 6000;
+const CMD_INTERVAL = 200, STATUS_INTERVAL = 500;
+
+/* ---------- 命令发送 ---------- */
+async function send(obj) {
+  try {
+    const r = await fetch("/cmd", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(obj),
+    });
+    return r.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+/* ---------- 驾驶（按住发送，松开即停） ---------- */
+const driveState = { forward: 0, turn: 0 };
+let driveTimer = null;
+
+function driveUpdate() {
+  send({ forward: driveState.forward, turn: driveState.turn });
+}
+function driveSet(forward, turn) {
+  driveState.forward = forward;
+  driveState.turn = turn;
+  driveUpdate();
+  if (driveTimer) clearInterval(driveTimer);
+  if (forward !== 0 || turn !== 0) {
+    driveTimer = setInterval(driveUpdate, CMD_INTERVAL); // 按住期间心跳
+  }
+}
+
+const DIRS = {
+  fwd: [DRIVE, 0], back: [-DRIVE, 0],
+  left: [0, TURN], right: [0, -TURN], stop: [0, 0],
+};
+document.querySelectorAll("[data-drive]").forEach((btn) => {
+  const [f, t] = DIRS[btn.dataset.drive];
+  btn.addEventListener("pointerdown", (e) => { e.preventDefault(); driveSet(f, t); });
+  const release = () => { if (btn.dataset.drive !== "stop") driveSet(0, 0); };
+  btn.addEventListener("pointerup", release);
+  btn.addEventListener("pointercancel", release);
+  btn.addEventListener("pointerleave", release);
+});
+
+/* 键盘 WASD / 方向键 */
+const KEYS = {
+  w: "fwd", ArrowUp: "fwd", s: "back", ArrowDown: "back",
+  a: "left", ArrowLeft: "left", d: "right", ArrowRight: "right",
+};
+const held = new Set();
+function keyboardUpdate() {
+  let f = 0, t = 0;
+  for (const k of held) {
+    const [df, dt] = DIRS[KEYS[k]];
+    f += df; t += dt;
+  }
+  driveSet(Math.max(-DRIVE, Math.min(DRIVE, f)), Math.max(-TURN, Math.min(TURN, t)));
+}
+window.addEventListener("keydown", (e) => {
+  if (KEYS[e.key]) { held.add(e.key); keyboardUpdate(); e.preventDefault(); }
+});
+window.addEventListener("keyup", (e) => {
+  if (KEYS[e.key]) { held.delete(e.key); keyboardUpdate(); e.preventDefault(); }
+});
+
+/* ---------- 急停/恢复（按钮随状态切换语义） ---------- */
+let estopLatched = false;
+$("estopBtn").addEventListener("click", () => {
+  if (estopLatched) {
+    send({ resume: true });
+  } else {
+    send({ estop: true });
+    driveSet(0, 0);
+  }
+});
+
+/* ---------- 升降（按住，3s 自动停） ---------- */
+document.querySelectorAll("[data-lift]").forEach((btn) => {
+  let timer = null;
+  const dir = parseInt(btn.dataset.lift, 10);
+  btn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    send({ lift: dir });
+    timer = setTimeout(() => send({ lift: 0 }), 3000); // 单次按压上限 3s
+  });
+  const release = () => {
+    if (timer) clearTimeout(timer);
+    send({ lift: 0 });
+  };
+  btn.addEventListener("pointerup", release);
+  btn.addEventListener("pointercancel", release);
+  btn.addEventListener("pointerleave", release);
+});
+
+/* ---------- 舵机滑条 ---------- */
+for (const sv of CFG.servos) {
+  const wrap = document.createElement("div");
+  wrap.style.marginBottom = "14px";
+  wrap.innerHTML = `
+    <div class="slider-label"><span>${sv.label}</span><span><b id="svAngle${sv.id}">0</b>°</span></div>
+    <input type="range" id="svRange${sv.id}" min="${sv.min}" max="${sv.max}" step="1" value="0">
+  `;
+  $("servoList").appendChild(wrap);
+  const range = wrap.querySelector("input");
+  let t = null;
+  range.addEventListener("input", () => {
+    $(`svAngle${sv.id}`).textContent = range.value;
+    if (t) clearTimeout(t);
+    t = setTimeout(() => send({ servo: sv.id, angle: parseInt(range.value, 10) }), 80);
+  });
+}
+
+/* ---------- 遥测轮询 ---------- */
+function updateStatus() {
+  fetch("/status").then((r) => r.json()).then((s) => {
+    $("linkBadge").textContent = s.stcOk ? "链路OK" : "STC断链";
+    $("linkBadge").className = "badge " + (s.stcOk ? "ok" : "err");
+    const v = (s.batteryMv / 1000).toFixed(2);
+    $("batteryBadge").textContent = `🔋 ${v}V ${s.batteryPct}%`;
+    $("batteryBadge").className = "badge" +
+      (s.batteryLevel === "critical" ? " err" : s.batteryLevel === "low" ? " warn" : " ok");
+    estopLatched = s.estop;
+    $("estopBadge").classList.toggle("hidden", !s.estop);
+    $("estopBtn").textContent = s.estop ? "解除急停" : "急停";
+    if (CFG.hasSonar) {
+      $("sonarCm").textContent = s.sonarCm === null ? "--" : s.sonarCm;
+    }
+    for (const sv of s.servos || []) {
+      const range = $(`svRange${sv.id}`);
+      if (range && document.activeElement !== range) {
+        range.value = sv.angle;
+        $(`svAngle${sv.id}`).textContent = sv.angle;
+      }
+    }
+  }).catch(() => {
+    $("linkBadge").textContent = "离线";
+    $("linkBadge").className = "badge err";
+  });
+}
+setInterval(updateStatus, STATUS_INTERVAL);
+updateStatus();
+
+/* ---------- WiFi 设置 ---------- */
+$("wifiSave").addEventListener("click", () => {
+  send2("/wifi", { ssid: $("wifiSsid").value, password: $("wifiPass").value });
+});
+$("wifiClear").addEventListener("click", () => send2("/wifi", { clear: true }));
+async function send2(url, obj) {
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(obj),
+    });
+    alert("已提交，设备将重启");
+  } catch (e) {
+    alert("提交失败：" + e);
+  }
+}
+</script>
+</body>
+</html>

@@ -13,6 +13,11 @@ repository = ""
 [workspace.dependencies]
 smars-protocol = { path = "crates/smars-protocol" }
 
+# esp-idf-svc 0.53 原版引用 ESP-IDF 5.4+ 的 wifi_event_neighbor_report_t.n_report 字段，
+# 与钉住的 ESP-IDF 5.3.2（字段名 report）不符；vendored 副本仅改此一行，见 lib/esp-idf-svc。
+[patch.crates-io]
+esp-idf-svc = { path = "lib/esp-idf-svc" }
+
 [profile.release]
 opt-level = "s"
 lto = true

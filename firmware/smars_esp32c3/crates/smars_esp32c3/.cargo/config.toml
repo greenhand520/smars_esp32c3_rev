@@ -1,0 +1,22 @@
+# 仅在本 crate 目录下执行 cargo 命令时生效（config 按当前目录向上发现）。
+# 因此构建请 `cd crates/smars_esp32c3` 后执行，详见 README.md。
+
+[build]
+target = "riscv32imc-esp-espidf"
+
+[target.'cfg(target_os = "espidf")']
+linker = "ldproxy"
+runner = "espflash flash --monitor"
+# libc 在 ESP-IDF 5.x 下使用 64 位 time_t（esp-idf-sys BUILD-OPTIONS.md 要求）
+rustflags = ["--cfg", "espidf_time64"]
+
+[unstable]
+build-std = ["std", "panic_abort"]
+
+[env]
+MCU = "esp32c3"
+# 钉住 ESP-IDF 版本：esp-idf-sys 0.38 的绑定生成与 IDF 5.5 的 newlib `_reent`
+# 布局不兼容（_stdin/_stdout 字段缺失），5.4.x 为交集：esp-idf-svc 0.53 需要 5.4 的 n_report 字段，esp-idf-sys 0.38 不兼容 5.5 的 _reent
+ESP_IDF_VERSION = "v5.3.2"
+# 相对路径按本 config 文件所在目录解析为绝对路径，保证 sdkconfig.defaults 被 esp-idf-sys 找到
+ESP_IDF_SDKCONFIG_DEFAULTS = { value = "sdkconfig.defaults", relative = true }

@@ -120,6 +120,18 @@ firmware/smars_esp32c3/
 
 ## 9. 构建与提交计划
 
+### 9.1 工具链约束（实现中实测，重要）
+
+| 约束 | 处理 |
+|---|---|
+| esp-idf-sys 0.38 与 ESP-IDF 5.4+ 的 newlib `_reent` 布局不兼容；esp-idf-svc 0.53 引用 5.4+ 的 `n_report` 字段 | 钉 **ESP-IDF 5.3.2**（`.cargo/config.toml` 的 `ESP_IDF_VERSION`），并对 vendored `lib/esp-idf-svc` 补一行 `report` 字段名补丁（`[patch.crates-io]`） |
+| 最新 nightly 在 esp-idf-svc 0.53 上触发 rustc ICE | 钉 **nightly-2025-06-01**（`rust-toolchain.toml`） |
+| embuild 0.33 的 cmake 路径不输出 `--ldproxy-linker`，ldproxy 0.3.5 强制要求该参数 | 应用 crate 的 `build.rs` 调 `embuild::espidf::sysenv::output()` 转发链接参数（esp-idf-template 标准写法），并兜底注入 `--ldproxy-linker` |
+| `links` 元数据传播的链接参数（libnewlib/esp-idf 组件库）必须由应用 crate 转发才作用于最终链接 | 同上，`build.rs` 转发 |
+| 目标 `riscv32imc-esp-espidf` 为 tier-3 无预编译 std | nightly + `build-std`（`.cargo/config.toml`） |
+
+WS2812 用 `rmt-legacy` API（新 RMT API 需自定义编码器，收益低）；一次性 ADC 用 `adc-oneshot-legacy`。两者均为有意的弃用告警。
+
 ```bash
 cargo test                                             # host：smars-protocol + 纯逻辑单测
 cd crates/smars_esp32c3

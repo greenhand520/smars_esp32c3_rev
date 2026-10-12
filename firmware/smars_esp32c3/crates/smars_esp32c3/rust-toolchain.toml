@@ -1,0 +1,8 @@
+# riscv32imc-esp-espidf 为 tier-3 目标，无预编译 std，
+# 需 nightly + build-std（见 .cargo/config.toml）从源码构建 std。
+#
+# 钉住 2025-06-01：最新 nightly 在 esp-idf-svc 0.53 上触发 rustc ICE
+# （compare_impl_item / scan_n），此版本为该 crate 时代的稳定组合。
+[toolchain]
+channel = "nightly-2025-06-01"
+components = ["rust-src"]

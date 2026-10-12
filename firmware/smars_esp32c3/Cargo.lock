@@ -553,8 +553,6 @@ dependencies = [
 [[package]]
 name = "esp-idf-svc"
 version = "0.53.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80528df10e8ee316043f0a53bcbec3126a217168813afdcae11078a5f34e60c9"
 dependencies = [
  "embassy-futures",
  "embedded-hal-async",
@@ -1202,12 +1200,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
+name = "smars-core"
+version = "0.1.0"
+
+[[package]]
 name = "smars-esp32c3"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "embuild",
+ "esp-idf-hal",
  "esp-idf-svc",
  "esp-idf-sys",
  "log",
+ "serde_json",
+ "smars-core",
  "smars-protocol",
 ]
 
