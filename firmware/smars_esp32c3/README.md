@@ -15,6 +15,7 @@ Rust（esp-idf-svc / ESP-IDF 5.3.2），按机器人配置以 Cargo feature 切�
 | `robot-cargo` | cargo | 装载（1×SG90） | 上下 0~60 |
 | `robot-lift` | lift | 叉车（SG90 + N20 升降） | 上下 0~60 + 升/降按钮 |
 | `robot-scan` | scan | 超声波云台（SG90 ±60°） | 云台滑条 + 距离显示 |
+| `robot-truck` | truck | 卡车（4 电机 + 车斗 2×SG90 联动 + 超声波） | 车斗滑条（0~90°）+ 距离显示 |
 
 `robot-*` feature 必须恰好启用一个（编译期断言）。
 

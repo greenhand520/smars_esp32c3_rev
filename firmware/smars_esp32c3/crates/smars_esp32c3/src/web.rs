@@ -25,9 +25,11 @@ fn index_page(net: &NetInfo) -> String {
     let servos: Vec<Value> = CONFIG
         .servos
         .iter()
-        .map(|s| {
+        .enumerate()
+        .map(|(idx, s)| {
             json!({
-                "id": s.id,
+                "idx": idx,
+                "ids": s.ids,
                 "label": s.label,
                 "min": s.spec.logical_min,
                 "max": s.spec.logical_max,
@@ -79,7 +81,10 @@ pub fn start(
             let servos: Vec<Value> = CONFIG
                 .servos
                 .iter()
-                .map(|sv| json!({"id": sv.id, "label": sv.label, "angle": s.servo_angle[sv.id as usize - 1]}))
+                .enumerate()
+                .map(|(idx, sv)| {
+                    json!({"idx": idx, "ids": sv.ids, "label": sv.label, "angle": s.servo_angle[idx]})
+                })
                 .collect();
             let body = json!({
                 "name": CONFIG.name,
@@ -211,9 +216,8 @@ fn handle_cmd(shared: &Arc<Mutex<Shared>>, body: &str) -> (u16, &'static str, St
 
     if let Some(sv) = v.get("servo").and_then(Value::as_u64) {
         if let Some(a) = v.get("angle").and_then(Value::as_i64) {
-            let id = sv as u8;
-            if let Some(def) = CONFIG.servos.iter().find(|d| d.id == id) {
-                let idx = id as usize - 1;
+            let idx = sv as usize;
+            if let Some(def) = CONFIG.servos.get(idx) {
                 let angle = (a as i16).clamp(def.spec.logical_min, def.spec.logical_max);
                 s.servo_angle[idx] = angle;
                 s.servo_dirty = true;

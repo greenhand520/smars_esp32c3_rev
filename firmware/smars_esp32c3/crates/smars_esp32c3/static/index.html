@@ -264,16 +264,16 @@ for (const sv of CFG.servos) {
   const wrap = document.createElement("div");
   wrap.style.marginBottom = "14px";
   wrap.innerHTML = `
-    <div class="slider-label"><span>${sv.label}</span><span><b id="svAngle${sv.id}">0</b>°</span></div>
-    <input type="range" id="svRange${sv.id}" min="${sv.min}" max="${sv.max}" step="1" value="0">
+    <div class="slider-label"><span>${sv.label}</span><span><b id="svAngle${sv.idx}">0</b>°</span></div>
+    <input type="range" id="svRange${sv.idx}" min="${sv.min}" max="${sv.max}" step="1" value="0">
   `;
   $("servoList").appendChild(wrap);
   const range = wrap.querySelector("input");
   let t = null;
   range.addEventListener("input", () => {
-    $(`svAngle${sv.id}`).textContent = range.value;
+    $(`svAngle${sv.idx}`).textContent = range.value;
     if (t) clearTimeout(t);
-    t = setTimeout(() => send({ servo: sv.id, angle: parseInt(range.value, 10) }), 80);
+    t = setTimeout(() => send({ servo: sv.idx, angle: parseInt(range.value, 10) }), 80);
   });
 }
 
@@ -295,10 +295,10 @@ function updateStatus() {
       $("sonarCm").textContent = s.sonarCm === null ? "--" : s.sonarCm;
     }
     for (const sv of s.servos || []) {
-      const range = $(`svRange${sv.id}`);
+      const range = $(`svRange${sv.idx}`);
       if (range && document.activeElement !== range) {
         range.value = sv.angle;
-        $(`svAngle${sv.id}`).textContent = sv.angle;
+        $(`svAngle${sv.idx}`).textContent = sv.angle;
       }
     }
     if (s.light) {

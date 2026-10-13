@@ -110,8 +110,8 @@ fn main() {
 
     // ---- 硬件 ----
     // 舵机：按配置取 id 1=IO4 / id 2=IO5
-    let has_servo1 = CONFIG.servos.iter().any(|s| s.id == 1);
-    let has_servo2 = CONFIG.servos.iter().any(|s| s.id == 2);
+    let has_servo1 = CONFIG.servos.iter().any(|s| s.ids.contains(&1));
+    let has_servo2 = CONFIG.servos.iter().any(|s| s.ids.contains(&2));
     let servo_pins: [Option<AnyIOPin>; 2] = [
         if has_servo1 { Some(peripherals.pins.gpio4.into()) } else { None },
         if has_servo2 { Some(peripherals.pins.gpio5.into()) } else { None },
@@ -123,9 +123,11 @@ fn main() {
         servo_pins,
     )
     .expect("舵机初始化失败");
-    // 上电先输出初始角（0°，云台为中位），避免舵机上电漂移
+    // 上电先输出初始角（0°，云台为中位），避免舵机上电漂移；多通道联动同角
     for def in CONFIG.servos {
-        servos.set_pulse_us(def.id as usize - 1, def.spec.pulse_us(0));
+        for &id in def.ids {
+            servos.set_pulse_us(id as usize - 1, def.spec.pulse_us(0));
+        }
     }
 
     // 超声波（无该外设时引脚仍占位，测量任务跳过）
@@ -252,11 +254,13 @@ fn main() {
         fwd_slew = smars_core::slew(fwd_slew, fwd, SLEW_STEP);
         turn_slew = smars_core::slew(turn_slew, turn, SLEW_STEP);
 
-        // 舵机（变化时下发）
+        // 舵机（变化时下发；多通道联动同角）
         if servo_dirty {
-            for def in CONFIG.servos {
-                let angle = servo_angles[def.id as usize - 1];
-                servos.set_pulse_us(def.id as usize - 1, def.spec.pulse_us(angle));
+            for (idx, def) in CONFIG.servos.iter().enumerate() {
+                let angle = servo_angles[idx];
+                for &id in def.ids {
+                    servos.set_pulse_us(id as usize - 1, def.spec.pulse_us(angle));
+                }
             }
         }
 
@@ -264,7 +268,7 @@ fn main() {
         let want = (fwd_slew, turn_slew, lift as i32);
         if last_sent != Some(want) || last_send.elapsed() > Duration::from_millis(500) {
             let lift_duty = lift as i32 * smars_core::FULL_SCALE;
-            let cmd = drive::set_all_command(fwd_slew, turn_slew, lift_duty);
+            let cmd = drive::set_all_command(fwd_slew, turn_slew, lift_duty, CONFIG.drive);
             match stc.request(cmd) {
                 Ok(_) => {
                     let mut s = shared.lock().unwrap_or_else(|e| e.into_inner());

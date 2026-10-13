@@ -5,12 +5,22 @@
 
 use smars_core::ServoSpec;
 
-/// 舵机描述：网页 UI + 通道绑定（1 = IO4/PWM9，2 = IO5/PWM10）
+/// 舵机描述：网页 UI 一条控制 + 物理通道（1 = IO4/PWM9，2 = IO5/PWM10）。
+/// 多通道时联动同步（如 truck 车斗由 2 路 SG90 共同驱动）。
 #[derive(Debug, Clone, Copy)]
 pub struct ServoUi {
-    pub id: u8,
+    pub ids: &'static [u8],
     pub label: &'static str,
     pub spec: ServoSpec,
+}
+
+/// 底盘驱动布局（STC 通道映射，见 docs/design.md §4）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DriveLayout {
+    /// 双电机组：CH0/1 左、CH2/3 右、CH4/5 升降（RZ7888）、CH6/7 备用
+    DualGroup,
+    /// 四电机（2×DRV8833 用满 8 通道）：左 = CH0/1 + CH4/5，右 = CH2/3 + CH6/7
+    QuadMotor,
 }
 
 /// 机器人配置（由 feature 决定）
@@ -23,6 +33,8 @@ pub struct RobotConfig {
     pub has_sonar: bool,
     /// 是否有升降电机（RZ7888，STC CH4/CH5）
     pub has_lift: bool,
+    /// 底盘驱动布局（STC 通道映射）
+    pub drive: DriveLayout,
     /// BAT_ADC 分压系数（2:1 分压 = 2000）
     pub battery_scale_permille: u32,
 }
@@ -32,6 +44,8 @@ const SERVO_UP_DOWN_0_90: ServoSpec =
     ServoSpec { logical_min: 0, logical_max: 90, physical_min: 0, physical_max: 90 };
 const SERVO_UP_DOWN_0_60: ServoSpec =
     ServoSpec { logical_min: 0, logical_max: 60, physical_min: 0, physical_max: 60 };
+const SERVO_BED_0_90: ServoSpec =
+    ServoSpec { logical_min: 0, logical_max: 90, physical_min: 0, physical_max: 90 };
 const SERVO_GRIPPER_0_90: ServoSpec =
     ServoSpec { logical_min: 0, logical_max: 90, physical_min: 0, physical_max: 90 };
 const SERVO_TURRET_PM60: ServoSpec =
@@ -44,7 +58,8 @@ const SELECTED_ROBOTS: u32 = cfg!(feature = "robot-bolt") as u32
     + cfg!(feature = "robot-fork") as u32
     + cfg!(feature = "robot-cargo") as u32
     + cfg!(feature = "robot-lift") as u32
-    + cfg!(feature = "robot-scan") as u32;
+    + cfg!(feature = "robot-scan") as u32
+    + cfg!(feature = "robot-truck") as u32;
 const _: () = assert!(SELECTED_ROBOTS == 1, "必须恰好启用一个 robot-* feature");
 
 #[cfg(feature = "robot-bolt")]
@@ -53,6 +68,7 @@ pub const CONFIG: RobotConfig = RobotConfig {
     servos: &[],
     has_sonar: true,
     has_lift: false,
+    drive: DriveLayout::DualGroup,
     battery_scale_permille: BATTERY_SCALE_2_TO_1,
 };
 
@@ -60,38 +76,53 @@ pub const CONFIG: RobotConfig = RobotConfig {
 pub const CONFIG: RobotConfig = RobotConfig {
     name: "fork",
     servos: &[
-        ServoUi { id: 1, label: "上下", spec: SERVO_UP_DOWN_0_90 },
-        ServoUi { id: 2, label: "夹持", spec: SERVO_GRIPPER_0_90 },
+        ServoUi { ids: &[1], label: "上下", spec: SERVO_UP_DOWN_0_90 },
+        ServoUi { ids: &[2], label: "夹持", spec: SERVO_GRIPPER_0_90 },
     ],
     has_sonar: false,
     has_lift: false,
+    drive: DriveLayout::DualGroup,
     battery_scale_permille: BATTERY_SCALE_2_TO_1,
 };
 
 #[cfg(feature = "robot-cargo")]
 pub const CONFIG: RobotConfig = RobotConfig {
     name: "cargo",
-    servos: &[ServoUi { id: 1, label: "上下", spec: SERVO_UP_DOWN_0_60 }],
+    servos: &[ServoUi { ids: &[1], label: "上下", spec: SERVO_UP_DOWN_0_60 }],
     has_sonar: false,
     has_lift: false,
+    drive: DriveLayout::DualGroup,
     battery_scale_permille: BATTERY_SCALE_2_TO_1,
 };
 
 #[cfg(feature = "robot-lift")]
 pub const CONFIG: RobotConfig = RobotConfig {
     name: "lift",
-    servos: &[ServoUi { id: 1, label: "上下", spec: SERVO_UP_DOWN_0_60 }],
+    servos: &[ServoUi { ids: &[1], label: "上下", spec: SERVO_UP_DOWN_0_60 }],
     has_sonar: false,
     has_lift: true,
+    drive: DriveLayout::DualGroup,
     battery_scale_permille: BATTERY_SCALE_2_TO_1,
 };
 
 #[cfg(feature = "robot-scan")]
 pub const CONFIG: RobotConfig = RobotConfig {
     name: "scan",
-    servos: &[ServoUi { id: 1, label: "云台", spec: SERVO_TURRET_PM60 }],
+    servos: &[ServoUi { ids: &[1], label: "云台", spec: SERVO_TURRET_PM60 }],
     has_sonar: true,
     has_lift: false,
+    drive: DriveLayout::DualGroup,
+    battery_scale_permille: BATTERY_SCALE_2_TO_1,
+};
+
+#[cfg(feature = "robot-truck")]
+pub const CONFIG: RobotConfig = RobotConfig {
+    name: "truck",
+    // 车斗：2 路 SG90 联动（ids = [1, 2]），0~90°
+    servos: &[ServoUi { ids: &[1, 2], label: "车斗", spec: SERVO_BED_0_90 }],
+    has_sonar: true,
+    has_lift: false,
+    drive: DriveLayout::QuadMotor,
     battery_scale_permille: BATTERY_SCALE_2_TO_1,
 };
 

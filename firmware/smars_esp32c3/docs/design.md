@@ -37,6 +37,10 @@
 | 3 | `config-loader` | 同上 | 上下 0~60° | 无 | 无 | 单舵机滑条 |
 | 4 | `config-forklift` | 同上 | 上下 0~60° | 无 | N20 正反转 | 舵机滑条 + 升/降按住按钮 |
 | 5 | `config-sonar` | 同上 | 云台 ±60°（居中 90°） | 随云台转动 | 无 | 云台滑条 + 距离显示 |
+| 6 | `robot-truck`（truck） | 4 电机（2×DRV8833 用满 8 路） | 车斗 2×SG90 联动 0~90° | 固定安装 | 无 | 车斗滑条（单条联动双舵机）+ 距离显示 |
+
+舵机描述支持**多通道联动**（`ServoUi.ids`）：一条网页控制同步驱动多路 SG90
+（truck 车斗即 IO4+IO5 同角）。网页命令按 UI 下标寻址，固件映射到物理通道。
 
 所有配置公共 UI：电池电压、前进/后退/左转/右转（触屏按钮 + 键盘 WASD/方向键）、急停、链路状态。
 
@@ -60,6 +64,9 @@
 | CH2 / CH3 | 右电机组 IN1 / IN2 | DRV8833 #1 通道 B |
 | CH4 / CH5 | 电机 3 IN1/IN2 或 RZ7888 INA/INB | DRV8833 #2 通道 A（4 电机配置）或升降（叉车配置） |
 | CH6 / CH7 | 电机 4 IN1/IN2 | DRV8833 #2 通道 B（4 电机配置）；其余配置备用 |
+
+truck（4 电机）布局：左 = CH0/1（左前）+ CH4/5（左后），右 = CH2/3（右前）+ CH6/7（右后），
+左右各两电机同油门（保持已确认表的 CH0/1=左、CH2/3=右 锚点，接线须按此对应）。
 
 运动控制（每侧）：前进 = IN1 占空比 $v$、IN2=0；后退 = IN1=0、IN2=$v$；停止 = 双 0（滑行）；
 $v = \mathrm{round}(速度 \times 10000)$，协议 duty 0~10000。频率统一 A 组/B 组各 20 kHz（可配）。
@@ -128,6 +135,7 @@ firmware/smars_esp32c3/
 | `robot-cargo` | cargo | config-loader |
 | `robot-lift` | lift | config-forklift |
 | `robot-scan` | scan | config-sonar |
+| `robot-truck` | truck | truck（4 电机 + 车斗联动舵机） |
 
 - `compile_error!` 保证恰好启用一个机器人 feature。
 
@@ -164,6 +172,9 @@ WS2812 用 `rmt-legacy` API（新 RMT API 需自定义编码器，收益低）�
 
 遥测行（浏览器实测）：电池电压与超声波测距同一行（flex 各半）；无超声波配置时电池占满整行；
 模拟 /status 遥测注入后电压/百分比/距离正确刷新显示。
+
+truck（浏览器实测）：车斗单滑条 0~90° 联动双舵机（命令按 UI 下标 `{"servo":0,...}`，
+固件映射物理通道 ids [1,2]）；fork 双滑条（上下/夹持）独立寻址回归正常。
 
 ```bash
 cargo test                                             # host：smars-protocol + 纯逻辑单测

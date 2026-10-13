@@ -36,6 +36,7 @@ robot-fork = []
 robot-cargo = []
 robot-lift = []
 robot-scan = []
+robot-truck = []
 # 可选外设特性（与 robot-* 叠加）
 buzz = []     # 蜂鸣器：开机旋律 + 网页喇叭按钮
 ws2812 = []   # WS2812 灯带（WS2812_COUNT 颗）：开关 + 网页效果控制
