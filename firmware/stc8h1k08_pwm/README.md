@@ -3,7 +3,7 @@
 STC8H1K08 通过 UART1 接收主控 MCU 命令，输出 8 路 PWM（PWMA×4 + PWMB×4，2 路独立频率、8 路独立占空比）。
 
 - 设计、通信协议 v2、硬件约束与上电验证清单：[docs/design.md](docs/design.md)
-- 数据手册：`/mnt/MyFiles/Hardware/datasheet/STC-STC8H1K08-36I-QFN20.pdf`
+- 介绍：[STC8H1K08](https://stcmicro.com/cn/stc/stc8h1k08.html)
 
 ## 硬件接口
 

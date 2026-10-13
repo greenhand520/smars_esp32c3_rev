@@ -24,7 +24,7 @@ flowchart LR
 命令/语义/测试向量见 [stc8h1k08_pwm/docs/design.md](firmware/stc8h1k08_pwm/docs/design.md) §4；
 ESP32 侧为协议主机实现，`smars-protocol` crate 与 STC 固件逐条对齐并双向单测）。
 
-## 机器人型号（Rust feature）
+## 小车型号（Rust feature）
 
 主控固件按 3D 打印件配置切换型号，每台编译期绑定名字（网页标题/热点名 `SMARS-<名字>`）：
 
