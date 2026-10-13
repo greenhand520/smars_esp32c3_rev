@@ -90,6 +90,7 @@ pub fn start(
                 "name": CONFIG.name,
                 "estop": s.estop,
                 "stcOk": s.stc_ok,
+                "lowBattery": smars_core::battery_cutoff(s.battery_mv),
                 "batteryMv": s.battery_mv,
                 "batteryPct": s.battery_pct,
                 "batteryLevel": battery_level_str(&s),
@@ -173,6 +174,12 @@ fn handle_cmd(shared: &Arc<Mutex<Shared>>, body: &str) -> (u16, &'static str, St
     if v.get("resume").and_then(Value::as_bool) == Some(true) {
         s.estop_pending = Some(false);
     }
+
+    // 欠压切断：<3.00V 不响应控制（急停/恢复/查询仍可用）
+    if smars_core::battery_cutoff(s.battery_mv) {
+        return (409, "Conflict", r#"{"ok":false,"lowBattery":true}"#.into());
+    }
+
     // 喇叭（buzz 特性；蜂鸣器线程播放）
     if v.get("horn").and_then(Value::as_i64) == Some(1) {
         s.horn_requested = true;

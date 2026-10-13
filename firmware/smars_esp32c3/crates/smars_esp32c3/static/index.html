@@ -34,7 +34,9 @@
   }
   input[type=range] { width: 100%; }
   .slider-label { display: flex; justify-content: space-between; font-size: 13px; color: #9aa4b0; margin-bottom: 4px; }
-  .big { font-size: 26px; font-weight: 700; }
+  .tele-val { font-size: 16px; font-weight: 700; }
+  .lowbat { color: #ff5252; }
+  button:disabled, input:disabled { opacity: .45; }
   .hidden { display: none; }
 </style>
 </head>
@@ -51,11 +53,11 @@
 <section id="telemetryRow">
   <div class="tele">
     <h2>电池电压</h2>
-    <div class="big"><span id="batteryV">--</span> V <small id="batteryPct">(--%)</small></div>
+    <div class="tele-val"><span id="batteryV">--</span> V <small id="batteryPct">(--%)</small> <span id="batteryWarn" class="lowbat hidden">电量低，控制已锁定</span></div>
   </div>
   <div class="tele" id="sonarPanel">
     <h2>超声波测距</h2>
-    <div class="big"><span id="sonarCm">--</span> cm</div>
+    <div class="tele-val"><span id="sonarCm">--</span> cm</div>
   </div>
 </section>
 
@@ -77,6 +79,24 @@
   </div>
 </section>
 
+<section id="servoPanel">
+  <h2>舵机</h2>
+  <div id="servoList"></div>
+</section>
+
+<section id="liftPanel">
+  <h2>升降</h2>
+  <div class="row">
+    <button data-lift="1">▲ 升</button>
+    <button data-lift="-1">▼ 降</button>
+  </div>
+</section>
+
+<section id="hornPanel">
+  <h2>喇叭</h2>
+  <button id="hornBtn" style="width:100%">📢 喇叭</button>
+</section>
+
 <section id="lightPanel">
   <h2>灯带（<span id="lightCount"></span> 颗）</h2>
   <div class="row" style="margin-bottom:8px">
@@ -91,23 +111,9 @@
   </div>
 </section>
 
-<section id="hornPanel">
-  <h2>喇叭</h2>
-  <button id="hornBtn" style="width:100%">📢 喇叭</button>
-</section>
 
-<section id="servoPanel">
-  <h2>舵机</h2>
-  <div id="servoList"></div>
-</section>
 
-<section id="liftPanel">
-  <h2>升降</h2>
-  <div class="row">
-    <button data-lift="1">▲ 升</button>
-    <button data-lift="-1">▼ 降</button>
-  </div>
-</section>
+
 
 <section>
   <h2>WiFi 设置</h2>
@@ -278,13 +284,24 @@ for (const sv of CFG.servos) {
 }
 
 /* ---------- 遥测轮询 ---------- */
+/* 欠压（<3.00V）时锁定全部控制（急停/恢复、WiFi 除外） */
+function setControlsEnabled(on) {
+  document
+    .querySelectorAll("[data-drive],[data-lift],[data-effect],#hornBtn,#lightToggle,#lightBrightness,#servoList input")
+    .forEach((el) => { el.disabled = !on; });
+}
 function updateStatus() {
   fetch("/status").then((r) => r.json()).then((s) => {
     $("linkBadge").textContent = s.stcOk ? "链路OK" : "STC断链";
     $("linkBadge").className = "badge " + (s.stcOk ? "ok" : "err");
     const v = (s.batteryMv / 1000).toFixed(2);
+    const low = s.lowBattery === true || (s.batteryMv > 0 && s.batteryMv < 3000);
     $("batteryV").textContent = s.batteryMv ? v : "--";
     $("batteryPct").textContent = `(${s.batteryPct}%)`;
+    $("batteryV").classList.toggle("lowbat", low);
+    $("batteryPct").classList.toggle("lowbat", low);
+    $("batteryWarn").classList.toggle("hidden", !low);
+    setControlsEnabled(!low);
     $("batteryBadge").textContent = `🔋 ${v}V ${s.batteryPct}%`;
     $("batteryBadge").className = "badge" +
       (s.batteryLevel === "critical" ? " err" : s.batteryLevel === "low" ? " warn" : " ok");

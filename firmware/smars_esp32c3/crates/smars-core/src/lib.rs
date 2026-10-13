@@ -136,6 +136,14 @@ pub enum BatteryLevel {
 pub const BATTERY_LOW_MV: u32 = 3500;
 pub const BATTERY_CRITICAL_MV: u32 = 3300;
 
+/// 欠压切断阈值：低于 3.00V 不响应控制（红色提示 + 固件拒动）
+pub const BATTERY_CUTOFF_MV: u32 = 3000;
+
+/// 是否欠压切断（电压有效且低于阈值；0 = 尚未采样，不切断）
+pub fn battery_cutoff(mv: u32) -> bool {
+    mv != 0 && mv < BATTERY_CUTOFF_MV
+}
+
 pub fn battery_level(mv: u32) -> BatteryLevel {
     if mv < BATTERY_CRITICAL_MV {
         BatteryLevel::Critical
@@ -248,6 +256,12 @@ mod tests {
         assert_eq!(battery_level(3499), BatteryLevel::Low);
         assert_eq!(battery_level(3300), BatteryLevel::Low);
         assert_eq!(battery_level(3299), BatteryLevel::Critical);
+        // 欠压切断：仅 <3.00V 且电压有效（0 = 未采样）
+        assert!(!battery_cutoff(0));
+        assert!(!battery_cutoff(3000));
+        assert!(!battery_cutoff(3200));
+        assert!(battery_cutoff(2999));
+        assert!(battery_cutoff(2500));
     }
 
     #[test]

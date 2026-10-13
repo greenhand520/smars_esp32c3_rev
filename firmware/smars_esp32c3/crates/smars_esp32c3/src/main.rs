@@ -191,7 +191,7 @@ fn main() {
 
     loop {
         // 取目标（网页线程写入）
-        let (mut fwd, mut turn, mut lift, estop_req, horn, servo_dirty, servo_angles) = {
+        let (mut fwd, mut turn, mut lift, estop_req, horn, bat_mv, servo_dirty, servo_angles) = {
             let mut s = shared.lock().unwrap_or_else(|e| e.into_inner());
             // 看门狗：失联停车
             if s.last_drive.elapsed() > DRIVE_TIMEOUT {
@@ -208,14 +208,23 @@ fn main() {
                 s.lift,
                 s.estop_pending.take(),
                 horn,
+                s.battery_mv,
                 std::mem::take(&mut s.servo_dirty),
                 s.servo_angle,
             )
         };
 
+        // 欠压切断：<3.00V 强制停机（网页已拒动，此处兜底防状态残留）
+        let low_power = smars_core::battery_cutoff(bat_mv);
+        if low_power {
+            fwd = 0;
+            turn = 0;
+            lift = 0;
+        }
+
         // 喇叭（buzz 特性）
         #[cfg(feature = "buzz")]
-        if horn {
+        if horn && !low_power {
             let _ = sound_tx.send(sound::Sound::Horn);
         }
         #[cfg(not(feature = "buzz"))]
@@ -254,8 +263,8 @@ fn main() {
         fwd_slew = smars_core::slew(fwd_slew, fwd, SLEW_STEP);
         turn_slew = smars_core::slew(turn_slew, turn, SLEW_STEP);
 
-        // 舵机（变化时下发；多通道联动同角）
-        if servo_dirty {
+        // 舵机（变化时下发；多通道联动同角；欠压时不动作，保持当前位）
+        if servo_dirty && !low_power {
             for (idx, def) in CONFIG.servos.iter().enumerate() {
                 let angle = servo_angles[idx];
                 for &id in def.ids {
@@ -329,7 +338,7 @@ fn main() {
                 (s.light_on, s.light_effect, s.light_brightness)
             };
             let mut frame = [smars_core::leds::Rgb(0, 0, 0); config::WS2812_COUNT];
-            if on {
+            if on && !low_power { // 欠压切断：灯带熄灭
                 let eff = *smars_core::leds::Effect::ALL
                     .get(effect as usize)
                     .unwrap_or(&smars_core::leds::Effect::Breath);
