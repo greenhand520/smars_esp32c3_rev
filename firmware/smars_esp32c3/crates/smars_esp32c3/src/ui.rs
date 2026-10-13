@@ -1,12 +1,16 @@
-//! 状态反馈：IO10 WS2812 单灯（RMT 驱动）+ IO2 蜂鸣器。
+//! 状态反馈：IO10 WS2812（RMT 驱动）+ IO2 蜂鸣器（LEDC 音频）。
 //!
 //! WS2812 时序：T0H=0.3µs/T0L=0.9µs，T1H=0.9µs/T1L=0.3µs，复位 >50µs。
-//! 蜂鸣器为 GPIO 直驱（无源蜂鸣器响度有限，仅作短促提示）。
+//! 蜂鸣器为无源蜂鸣器，LEDC 50% 占空比方波发声（`tone(freq, ms)`）。
 
 use std::time::Duration;
 
 use esp_idf_svc::hal::delay::Ets;
-use esp_idf_svc::hal::gpio::{AnyIOPin, Output, PinDriver};
+use esp_idf_svc::hal::gpio::AnyIOPin;
+use esp_idf_svc::hal::ledc::config::TimerConfig as LedcTimerConfig;
+use esp_idf_svc::hal::ledc::{
+    LedcDriver, LedcTimerDriver, LowSpeed, Resolution, CHANNEL2, TIMER1,
+};
 use esp_idf_svc::hal::rmt::config::TransmitConfig;
 use esp_idf_svc::hal::rmt::{FixedLengthSignal, PinState, Pulse, RmtChannel, TxRmtDriver};
 use esp_idf_svc::hal::sys::EspError;
@@ -70,26 +74,47 @@ impl<'d> Ws2812<'d> {
     }
 }
 
-/// 蜂鸣器（GPIO 直驱）
+/// 蜂鸣器（IO2，无源）：LEDC 音频 PWM 驱动，`tone(freq, ms)` 发声
 pub struct Buzzer<'d> {
-    pin: PinDriver<'d, Output>,
+    timer: LedcTimerDriver<'d, LowSpeed>,
+    ch: LedcDriver<'d>,
 }
 
 impl<'d> Buzzer<'d> {
-    pub fn new(pin: AnyIOPin<'d>) -> Result<Self, EspError> {
-        Ok(Self { pin: PinDriver::output(pin)? })
+    /// 占用 LEDC 定时器 1 + 通道 2（通道 0/1 留给舵机）
+    pub fn new(timer1: TIMER1<'d>, ch2: CHANNEL2<'d>, pin: AnyIOPin<'d>) -> Result<Self, EspError> {
+        // 初始 2 kHz / 8-bit：任意音高换频后仍满足 LEDC 频率×分辨率上限
+        let config = LedcTimerConfig::default().frequency(Hertz::from(2_000)).resolution(Resolution::Bits8);
+        let timer = LedcTimerDriver::new(timer1, &config)?;
+        let ch = LedcDriver::new(ch2, &timer, pin)?;
+        Ok(Self { timer, ch })
     }
 
-    /// 短促提示音（阻塞）
-    pub fn beep(&mut self, times: u8, on_ms: u64, off_ms: u64) {
-        for _ in 0..times {
-            if let Err(e) = self.pin.set_high() {
-                warn!("蜂鸣器失败: {e}");
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(on_ms));
-            let _ = self.pin.set_low();
-            std::thread::sleep(Duration::from_millis(off_ms));
+    /// 播放 50% 占空比音调，持续 `duration_ms`；`freq_hz = 0` 为静默休止
+    pub fn tone(&mut self, freq_hz: u32, duration_ms: u32) {
+        if duration_ms == 0 {
+            return;
         }
+        if freq_hz == 0 {
+            self.stop();
+            std::thread::sleep(Duration::from_millis(duration_ms as u64));
+            return;
+        }
+        if let Err(e) = self.timer.set_frequency(Hertz::from(freq_hz)) {
+            warn!("蜂鸣器换频失败: {e}");
+            return;
+        }
+        let max = self.ch.get_max_duty();
+        if let Err(e) = self.ch.set_duty(max / 2) {
+            warn!("蜂鸣器发声失败: {e}");
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(duration_ms as u64));
+        self.stop();
+    }
+
+    /// 停止发声
+    pub fn stop(&mut self) {
+        let _ = self.ch.set_duty(0);
     }
 }

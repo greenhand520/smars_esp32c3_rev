@@ -8,6 +8,8 @@ mod config;
 mod drive;
 mod servo;
 mod sonar;
+#[cfg(feature = "buzz")]
+mod sound;
 mod stc_link;
 mod ui;
 mod web;
@@ -48,6 +50,8 @@ pub struct Shared {
     pub estop: bool,
     /// 网页请求的急停/恢复（控制线程执行 STC 命令后清零）
     pub estop_pending: Option<bool>,
+    /// 喇叭请求（buzz 特性，控制环转发给提示音线程）
+    pub horn_requested: bool,
     pub battery_mv: u32,
     pub battery_pct: u8,
     pub sonar_cm: Option<u16>,
@@ -66,6 +70,7 @@ impl Default for Shared {
             servo_dirty: false,
             estop: false,
             estop_pending: None,
+            horn_requested: false,
             battery_mv: 0,
             battery_pct: 0,
             sonar_cm: None,
@@ -104,7 +109,13 @@ fn main() {
         if has_servo1 { Some(peripherals.pins.gpio4.into()) } else { None },
         if has_servo2 { Some(peripherals.pins.gpio5.into()) } else { None },
     ];
-    let mut servos = servo::Servos::new(peripherals.ledc, servo_pins).expect("舵机初始化失败");
+    let mut servos = servo::Servos::new(
+        peripherals.ledc.timer0,
+        peripherals.ledc.channel0,
+        peripherals.ledc.channel1,
+        servo_pins,
+    )
+    .expect("舵机初始化失败");
     // 上电先输出初始角（0°，云台为中位），避免舵机上电漂移
     for def in CONFIG.servos {
         servos.set_pulse_us(def.id as usize - 1, def.spec.pulse_us(0));
@@ -121,8 +132,26 @@ fn main() {
     // 状态灯 + 蜂鸣器
     let mut led = ui::Ws2812::new(peripherals.rmt.channel0, peripherals.pins.gpio10.into())
         .expect("WS2812 初始化失败");
-    let mut buzzer = ui::Buzzer::new(peripherals.pins.gpio2.into()).expect("蜂鸣器初始化失败");
-    buzzer.beep(1, 60, 40);
+    let buzzer = ui::Buzzer::new(
+        peripherals.ledc.timer1,
+        peripherals.ledc.channel2,
+        peripherals.pins.gpio2.into(),
+    )
+    .expect("蜂鸣器初始化失败");
+
+    // 开机音：buzz 特性为 R2-D2 风格旋律（提示音线程播放），否则短促一声
+    #[cfg(feature = "buzz")]
+    let sound_tx = {
+        let (tx, rx) = std::sync::mpsc::channel::<sound::Sound>();
+        std::thread::spawn(move || sound::run(rx, buzzer));
+        let _ = tx.send(sound::Sound::Startup);
+        tx
+    };
+    #[cfg(not(feature = "buzz"))]
+    {
+        let mut buzzer = buzzer;
+        buzzer.tone(2_000, 60);
+    }
 
     // ---- UART0 ↔ STC8H1K08（115200 8N1，TX=IO21，RX=IO20）----
     let uart_config = UartConfig::new()
@@ -156,7 +185,7 @@ fn main() {
 
     loop {
         // 取目标（网页线程写入）
-        let (mut fwd, mut turn, mut lift, estop_req, servo_dirty, servo_angles) = {
+        let (mut fwd, mut turn, mut lift, estop_req, horn, servo_dirty, servo_angles) = {
             let mut s = shared.lock().unwrap_or_else(|e| e.into_inner());
             // 看门狗：失联停车
             if s.last_drive.elapsed() > DRIVE_TIMEOUT {
@@ -166,15 +195,25 @@ fn main() {
             if s.last_lift.elapsed() > LIFT_TIMEOUT {
                 s.lift = 0;
             }
+            let horn = std::mem::take(&mut s.horn_requested);
             (
                 s.forward,
                 s.turn,
                 s.lift,
                 s.estop_pending.take(),
+                horn,
                 std::mem::take(&mut s.servo_dirty),
                 s.servo_angle,
             )
         };
+
+        // 喇叭（buzz 特性）
+        #[cfg(feature = "buzz")]
+        if horn {
+            let _ = sound_tx.send(sound::Sound::Horn);
+        }
+        #[cfg(not(feature = "buzz"))]
+        let _ = horn;
 
         // 急停/恢复（STC 侧锁存语义，design §4.4）
         if let Some(enter) = estop_req {

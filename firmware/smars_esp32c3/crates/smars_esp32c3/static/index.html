@@ -69,6 +69,11 @@
   </div>
 </section>
 
+<section id="hornPanel">
+  <h2>喇叭</h2>
+  <button id="hornBtn" style="width:100%">📢 喇叭</button>
+</section>
+
 <section id="servoPanel">
   <h2>舵机</h2>
   <div id="servoList"></div>
@@ -106,6 +111,7 @@ $("robotName").textContent = "SMARS-" + CFG.name;
 if (!CFG.hasSonar) $("sonarPanel").classList.add("hidden");
 if (!CFG.hasLift) $("liftPanel").classList.add("hidden");
 if (CFG.servos.length === 0) $("servoPanel").classList.add("hidden");
+if (!CFG.hasBuzz) $("hornPanel").classList.add("hidden");
 $("wifiInfo").textContent = `当前模式：${CFG.mode === "ap" ? "热点" : "STA"}，IP ${CFG.ip}`;
 
 const DRIVE = 6000, TURN = 6000;
@@ -185,6 +191,12 @@ $("estopBtn").addEventListener("click", () => {
     send({ estop: true });
     driveSet(0, 0);
   }
+});
+
+/* ---------- 喇叭（buzz 特性） ---------- */
+$("hornBtn").addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  send({ horn: 1 });
 });
 
 /* ---------- 升降（按住，3s 自动停） ---------- */

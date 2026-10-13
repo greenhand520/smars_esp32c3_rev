@@ -1,7 +1,7 @@
 //! SG90 舵机驱动：LEDC 50 Hz，逻辑角度 → 脉宽（smars_core::ServoSpec）。
 
 use esp_idf_svc::hal::ledc::config::TimerConfig;
-use esp_idf_svc::hal::ledc::{LedcDriver, LedcTimerDriver, LowSpeed, Resolution, LEDC};
+use esp_idf_svc::hal::ledc::{LedcDriver, LedcTimerDriver, LowSpeed, Resolution, CHANNEL0, CHANNEL1, TIMER0};
 use esp_idf_svc::hal::units::Hertz;
 use esp_idf_svc::hal::{gpio::AnyIOPin, sys::EspError};
 use log::warn;
@@ -17,18 +17,19 @@ pub struct Servos<'d> {
 
 impl<'d> Servos<'d> {
     /// `pins[i]`：第 i 路舵机引脚（None = 该路不存在）
-    pub fn new(ledc: LEDC, pins: [Option<AnyIOPin<'d>>; 2]) -> Result<Self, EspError> {
+    /// 占用 LEDC 定时器 0 + 通道 0/1（通道 2 留给蜂鸣器）
+    pub fn new(timer0: TIMER0<'d>, ch0: CHANNEL0<'d>, ch1: CHANNEL1<'d>, pins: [Option<AnyIOPin<'d>>; 2]) -> Result<Self, EspError> {
         // 14-bit @ 50Hz：1 tick ≈ 1.22 µs，SG90 脉宽分辨率足够
         let config = TimerConfig::default().frequency(Hertz::from(50)).resolution(Resolution::Bits14);
-        let timer = LedcTimerDriver::new(ledc.timer0, &config)?;
+        let timer = LedcTimerDriver::new(timer0, &config)?;
 
         let [pin0, pin1] = pins;
         let ch0 = match pin0 {
-            Some(pin) => Some(LedcDriver::new(ledc.channel0, &timer, pin)?),
+            Some(pin) => Some(LedcDriver::new(ch0, &timer, pin)?),
             None => None,
         };
         let ch1 = match pin1 {
-            Some(pin) => Some(LedcDriver::new(ledc.channel1, &timer, pin)?),
+            Some(pin) => Some(LedcDriver::new(ch1, &timer, pin)?),
             None => None,
         };
         Ok(Self { timer, channels: [ch0, ch1] })

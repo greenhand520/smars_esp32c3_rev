@@ -39,6 +39,7 @@ fn index_page(net: &NetInfo) -> String {
         "servos": servos,
         "hasSonar": CONFIG.has_sonar,
         "hasLift": CONFIG.has_lift,
+        "hasBuzz": cfg!(feature = "buzz"),
         "mode": if net.mode == crate::wifi::Mode::Ap { "ap" } else { "sta" },
         "ip": net.ip,
     });
@@ -156,6 +157,10 @@ fn handle_cmd(shared: &Arc<Mutex<Shared>>, body: &str) -> (u16, &'static str, St
     }
     if v.get("resume").and_then(Value::as_bool) == Some(true) {
         s.estop_pending = Some(false);
+    }
+    // 喇叭（buzz 特性；蜂鸣器线程播放）
+    if v.get("horn").and_then(Value::as_i64) == Some(1) {
+        s.horn_requested = true;
     }
 
     let mut motion = false;
