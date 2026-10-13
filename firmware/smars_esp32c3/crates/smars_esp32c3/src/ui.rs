@@ -77,12 +77,15 @@ impl<'d> Ws2812<'d> {
     }
 }
 
-/// 蜂鸣器（IO2，无源）：LEDC 音频 PWM 驱动，`tone(freq, ms)` 发声
+/// 蜂鸣器（IO2，无源）：LEDC 音频 PWM 驱动，`tone(freq, ms)` 发声。
+/// 仅 `buzz` 特性编译（未启用该特性的硬件不焊蜂鸣器）。
+#[cfg(feature = "buzz")]
 pub struct Buzzer<'d> {
     timer: LedcTimerDriver<'d, LowSpeed>,
     ch: LedcDriver<'d>,
 }
 
+#[cfg(feature = "buzz")]
 impl<'d> Buzzer<'d> {
     /// 占用 LEDC 定时器 1 + 通道 2（通道 0/1 留给舵机）
     pub fn new(timer1: TIMER1<'d>, ch2: CHANNEL2<'d>, pin: AnyIOPin<'d>) -> Result<Self, EspError> {

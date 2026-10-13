@@ -18,6 +18,8 @@
   section { padding: 12px 14px; border-bottom: 1px solid #262c34; }
   h2 { font-size: 13px; margin: 0 0 10px; color: #9aa4b0; font-weight: 600; }
   .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 320px; margin: 0 auto; }
+  #telemetryRow { display: flex; gap: 12px; }
+  #telemetryRow > .tele { flex: 1; }
   button {
     font-size: 20px; padding: 18px 0; border: 0; border-radius: 12px;
     background: #2b3947; color: #fff; touch-action: none; user-select: none; cursor: pointer;
@@ -46,9 +48,15 @@
   </div>
 </header>
 
-<section id="sonarPanel">
-  <h2>超声波测距</h2>
-  <div class="big"><span id="sonarCm">--</span> cm</div>
+<section id="telemetryRow">
+  <div class="tele">
+    <h2>电池电压</h2>
+    <div class="big"><span id="batteryV">--</span> V <small id="batteryPct">(--%)</small></div>
+  </div>
+  <div class="tele" id="sonarPanel">
+    <h2>超声波测距</h2>
+    <div class="big"><span id="sonarCm">--</span> cm</div>
+  </div>
 </section>
 
 <section>
@@ -275,6 +283,8 @@ function updateStatus() {
     $("linkBadge").textContent = s.stcOk ? "链路OK" : "STC断链";
     $("linkBadge").className = "badge " + (s.stcOk ? "ok" : "err");
     const v = (s.batteryMv / 1000).toFixed(2);
+    $("batteryV").textContent = s.batteryMv ? v : "--";
+    $("batteryPct").textContent = `(${s.batteryPct}%)`;
     $("batteryBadge").textContent = `🔋 ${v}V ${s.batteryPct}%`;
     $("batteryBadge").className = "badge" +
       (s.batteryLevel === "critical" ? " err" : s.batteryLevel === "low" ? " warn" : " ok");

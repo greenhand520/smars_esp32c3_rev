@@ -136,29 +136,23 @@ fn main() {
     // 电池检测
     let mut bat = battery::Battery::new(peripherals.adc1, peripherals.pins.gpio3).expect("ADC 初始化失败");
 
-    // 状态灯 + 蜂鸣器
+    // 状态灯/灯带
     let mut led = ui::Ws2812::new(peripherals.rmt.channel0, peripherals.pins.gpio10.into())
         .expect("WS2812 初始化失败");
-    let buzzer = ui::Buzzer::new(
-        peripherals.ledc.timer1,
-        peripherals.ledc.channel2,
-        peripherals.pins.gpio2.into(),
-    )
-    .expect("蜂鸣器初始化失败");
-
-    // 开机音：buzz 特性为 R2-D2 风格旋律（提示音线程播放），否则短促一声
+    // 蜂鸣器（buzz 特性；未启用的硬件不焊蜂鸣器，固件不初始化、不发声）
     #[cfg(feature = "buzz")]
     let sound_tx = {
+        let buzzer = ui::Buzzer::new(
+            peripherals.ledc.timer1,
+            peripherals.ledc.channel2,
+            peripherals.pins.gpio2.into(),
+        )
+        .expect("蜂鸣器初始化失败");
         let (tx, rx) = std::sync::mpsc::channel::<sound::Sound>();
         std::thread::spawn(move || sound::run(rx, buzzer));
         let _ = tx.send(sound::Sound::Startup);
         tx
     };
-    #[cfg(not(feature = "buzz"))]
-    {
-        let mut buzzer = buzzer;
-        buzzer.tone(2_000, 60);
-    }
 
     // ---- UART0 ↔ STC8H1K08（115200 8N1，TX=IO21，RX=IO20）----
     let uart_config = UartConfig::new()
