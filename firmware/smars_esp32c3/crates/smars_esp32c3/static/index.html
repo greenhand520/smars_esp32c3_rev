@@ -51,13 +51,12 @@
 </header>
 
 <section id="telemetryRow">
-  <div class="tele">
-    <h2>电池电压</h2>
-    <div class="tele-val"><span id="batteryV">--</span> V <small id="batteryPct">(--%)</small> <span id="batteryWarn" class="lowbat hidden">电量低，控制已锁定</span></div>
+  <div class="tele tele-val">
+    电池电压: <b><span id="batteryV">--</span> V (<span id="batteryPct">--%</span>)</b>
+    <span id="batteryWarn" class="lowbat hidden">电量低，控制已锁定</span>
   </div>
-  <div class="tele" id="sonarPanel">
-    <h2>超声波测距</h2>
-    <div class="tele-val"><span id="sonarCm">--</span> cm</div>
+  <div class="tele tele-val" id="sonarPanel">
+    超声波测距: <b><span id="sonarCm">--</span> cm</b>
   </div>
 </section>
 
@@ -297,7 +296,7 @@ function updateStatus() {
     const v = (s.batteryMv / 1000).toFixed(2);
     const low = s.lowBattery === true || (s.batteryMv > 0 && s.batteryMv < 3000);
     $("batteryV").textContent = s.batteryMv ? v : "--";
-    $("batteryPct").textContent = `(${s.batteryPct}%)`;
+    $("batteryPct").textContent = `${s.batteryPct}%`;
     $("batteryV").classList.toggle("lowbat", low);
     $("batteryPct").classList.toggle("lowbat", low);
     $("batteryWarn").classList.toggle("hidden", !low);
