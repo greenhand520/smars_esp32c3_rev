@@ -1,0 +1,4 @@
+ESP32总览：https://www.espressif.com/zh-hans/products/socs
+ESP32-C3技术规格书: https://documentation.espressif.com/esp32-c3_datasheet_cn.html
+ESP32-C3技术参考手册: https://documentation.espressif.com/esp32-c3_technical_reference_manual_cn.pdf
+ESP32-C3-WROOM-02/ESP32-C3-WROOM-02U技术规格书: https://documentation.espressif.com/esp32-c3-wroom-02_datasheet_cn.pdf
