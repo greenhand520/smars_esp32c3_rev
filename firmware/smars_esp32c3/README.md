@@ -18,6 +18,13 @@ Rust（esp-idf-svc / ESP-IDF 5.3.2），按机器人配置以 Cargo feature 切�
 
 `robot-*` feature 必须恰好启用一个（编译期断言）。
 
+可选外设特性（与 robot-* 叠加）：
+
+| feature | 行为 |
+|---|---|
+| `buzz` | 开机播放 R2-D2 风格启动音；网页喇叭按钮（"滴滴"） |
+| `ws2812` | IO10 灯带（`config::WS2812_COUNT`，默认 20）；网页开关/亮度/效果（常亮、呼吸、彩虹、流水） |
+
 ## 一次性准备
 
 ```bash

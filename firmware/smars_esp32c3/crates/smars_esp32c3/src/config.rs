@@ -94,3 +94,10 @@ pub const CONFIG: RobotConfig = RobotConfig {
     has_lift: false,
     battery_scale_permille: BATTERY_SCALE_2_TO_1,
 };
+
+/// WS2812 灯带灯数（`ws2812` 特性；改这里即可适配不同长度灯带）
+pub const WS2812_COUNT: usize = 20;
+
+/// 可选外设特性（编译期，与 robot-* 叠加）
+pub const HAS_BUZZ: bool = cfg!(feature = "buzz");
+pub const HAS_LIGHT: bool = cfg!(feature = "ws2812");

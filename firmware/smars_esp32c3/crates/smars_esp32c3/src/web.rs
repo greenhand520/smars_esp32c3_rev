@@ -40,6 +40,8 @@ fn index_page(net: &NetInfo) -> String {
         "hasSonar": CONFIG.has_sonar,
         "hasLift": CONFIG.has_lift,
         "hasBuzz": cfg!(feature = "buzz"),
+        "hasLight": cfg!(feature = "ws2812"),
+        "lightCount": crate::config::WS2812_COUNT,
         "mode": if net.mode == crate::wifi::Mode::Ap { "ap" } else { "sta" },
         "ip": net.ip,
     });
@@ -91,6 +93,14 @@ pub fn start(
                 "turn": s.turn,
                 "lift": s.lift,
                 "servos": servos,
+                "light": {
+                    "on": s.light_on,
+                    "effect": smars_core::leds::Effect::ALL
+                        .get(s.light_effect as usize)
+                        .map(|e| e.id())
+                        .unwrap_or("breath"),
+                    "brightness": s.light_brightness,
+                },
             });
             let mut resp = request.into_response(200, Some("OK"), &[("Content-Type", "application/json")])?;
             resp.write(body.to_string().as_bytes())?;
@@ -161,6 +171,18 @@ fn handle_cmd(shared: &Arc<Mutex<Shared>>, body: &str) -> (u16, &'static str, St
     // 喇叭（buzz 特性；蜂鸣器线程播放）
     if v.get("horn").and_then(Value::as_i64) == Some(1) {
         s.horn_requested = true;
+    }
+    // 灯带（ws2812 特性）：开关 / 效果 / 亮度
+    if let Some(on) = v.get("lightOn").and_then(Value::as_bool) {
+        s.light_on = on;
+    }
+    if let Some(effect) = v.get("effect").and_then(Value::as_str) {
+        if let Some(idx) = smars_core::leds::Effect::ALL.iter().position(|e| e.id() == effect) {
+            s.light_effect = idx as u8;
+        }
+    }
+    if let Some(b) = v.get("brightness").and_then(Value::as_u64) {
+        s.light_brightness = (b as u8).min(100);
     }
 
     let mut motion = false;

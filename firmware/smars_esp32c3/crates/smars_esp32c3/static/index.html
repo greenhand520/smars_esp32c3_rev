@@ -69,6 +69,20 @@
   </div>
 </section>
 
+<section id="lightPanel">
+  <h2>灯带（<span id="lightCount"></span> 颗）</h2>
+  <div class="row" style="margin-bottom:8px">
+    <button id="lightToggle" style="font-size:14px">开关</button>
+    <input type="range" id="lightBrightness" min="0" max="100" step="5" value="60">
+  </div>
+  <div class="row">
+    <button data-effect="solid" style="font-size:14px">常亮</button>
+    <button data-effect="breath" style="font-size:14px">呼吸</button>
+    <button data-effect="rainbow" style="font-size:14px">彩虹</button>
+    <button data-effect="chase" style="font-size:14px">流水</button>
+  </div>
+</section>
+
 <section id="hornPanel">
   <h2>喇叭</h2>
   <button id="hornBtn" style="width:100%">📢 喇叭</button>
@@ -112,6 +126,8 @@ if (!CFG.hasSonar) $("sonarPanel").classList.add("hidden");
 if (!CFG.hasLift) $("liftPanel").classList.add("hidden");
 if (CFG.servos.length === 0) $("servoPanel").classList.add("hidden");
 if (!CFG.hasBuzz) $("hornPanel").classList.add("hidden");
+if (!CFG.hasLight) $("lightPanel").classList.add("hidden");
+$("lightCount").textContent = CFG.lightCount ?? 0;
 $("wifiInfo").textContent = `当前模式：${CFG.mode === "ap" ? "热点" : "STA"}，IP ${CFG.ip}`;
 
 const DRIVE = 6000, TURN = 6000;
@@ -199,6 +215,24 @@ $("hornBtn").addEventListener("pointerdown", (e) => {
   send({ horn: 1 });
 });
 
+/* ---------- 灯带（ws2812 特性）：开关 / 效果 / 亮度 ---------- */
+$("lightToggle").addEventListener("click", () => {
+  const on = $("lightToggle").dataset.on !== "1";
+  $("lightToggle").dataset.on = on ? "1" : "0";
+  $("lightToggle").textContent = on ? "开（点击关）" : "关（点击开）";
+  send({ lightOn: on });
+});
+document.querySelectorAll("[data-effect]").forEach((btn) => {
+  btn.addEventListener("click", () => send({ effect: btn.dataset.effect }));
+});
+{
+  let t = null;
+  $("lightBrightness").addEventListener("input", () => {
+    if (t) clearTimeout(t);
+    t = setTimeout(() => send({ brightness: parseInt($("lightBrightness").value, 10) }), 80);
+  });
+}
+
 /* ---------- 升降（按住，3s 自动停） ---------- */
 document.querySelectorAll("[data-lift]").forEach((btn) => {
   let timer = null;
@@ -255,6 +289,13 @@ function updateStatus() {
       if (range && document.activeElement !== range) {
         range.value = sv.angle;
         $(`svAngle${sv.id}`).textContent = sv.angle;
+      }
+    }
+    if (s.light) {
+      $("lightToggle").dataset.on = s.light.on ? "1" : "0";
+      $("lightToggle").textContent = s.light.on ? "开（点击关）" : "关（点击开）";
+      if (document.activeElement !== $("lightBrightness")) {
+        $("lightBrightness").value = s.light.brightness;
       }
     }
   }).catch(() => {

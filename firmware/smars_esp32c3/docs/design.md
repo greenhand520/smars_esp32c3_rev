@@ -19,11 +19,11 @@
 | IO | 功能 | 说明 |
 |---|---|---|
 | IO0 / IO1 | SDA / SCL | I2C 总线，本期预留（不初始化） |
-| IO2 | BUZZ | 无源蜂鸣器。⚠ IO2 为 strapping 脚，驱动电路复位时不得拉高 |
+| IO2 | BUZZ | 无源蜂鸣器（LEDC 音频 PWM）。⚠ IO2 为 strapping 脚，驱动电路复位时不得拉高 |
 | IO3 | BAT_ADC | 1S 锂电池（分压后输入），ADC 单次采样+滑动平均 |
 | IO4 / IO5 | PWM9 / PWM10 | SG90 舵机 1 / 舵机 2（LEDC 50 Hz，500~2500 µs） |
 | IO6 / IO7 | TRIG / ECHO | HC-SR04。⚠ ECHO 为 5V，硬件须分压/电平转换 |
-| IO10 | WS2812 | 单颗状态灯 |
+| IO10 | WS2812 | 单状态灯；`ws2812` 特性为灯带（`config::WS2812_COUNT` 颗，默认 20，改常量即可） |
 | IO20 / IO21 | UART0 RX / TX | ↔ STC8H1K08 P3.7(TXD)/P3.6(RXD)，交叉连接；日志走 USB-Serial-JTAG |
 
 上电默认：所有输出停止态（PWM 停、舵机保持、蜂鸣器静）。
@@ -39,6 +39,15 @@
 | 5 | `config-sonar` | 同上 | 云台 ±60°（居中 90°） | 随云台转动 | 无 | 云台滑条 + 距离显示 |
 
 所有配置公共 UI：电池电压、前进/后退/左转/右转（触屏按钮 + 键盘 WASD/方向键）、急停、链路状态。
+
+### 3.1 可选外设特性（与 robot-* 叠加）
+
+| feature | 行为 | 网页 UI |
+|---|---|---|
+| `buzz` | 开机播放 R2-D2 风格旋律（参考 servo-robot `startup_sound.rs`，独立线程经 LEDC `tone(freq,ms)` 播放） | 喇叭按钮（按下发"滴滴"） |
+| `ws2812` | IO10 灯带 `WS2812_COUNT`（默认 20，`config.rs` 一处改）；效果引擎在 `smars-core::leds`（纯逻辑可单测） | 灯带开关、亮度滑条、效果按钮（常亮/呼吸/彩虹/流水） |
+
+未启用时的行为：`buzz` 未启用开机短促一声；`ws2812` 未启用 IO10 为单状态灯（电池/急停/链路色）。启用 `ws2812` 后状态色不抢灯，由效果引擎独占灯带。
 
 ## 4. STC8H1K08 通道映射*（Q3 待确认）
 
@@ -147,6 +156,10 @@ WS2812 用 `rmt-legacy` API（新 RMT API 需自定义编码器，收益低）�
 | scan（sonar turret） | 1 条（-60~60 云台） | ✓ | 无 | 同上 |
 
 离线容错：无 /status 服务时链路徽标显示"离线"，页面不崩溃。
+
+可选特性 UI（浏览器实测）：`buzz` 喇叭按钮按 CFG.hasBuzz 显隐、按下无异常；
+`ws2812` 灯带面板（20 颗标注、开关、亮度、4 效果按钮）按 CFG.hasLight 显隐，
+效果/开关/亮度交互无异常；未启用特性时两面板正确隐藏。
 
 ```bash
 cargo test                                             # host：smars-protocol + 纯逻辑单测

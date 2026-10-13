@@ -12,14 +12,16 @@ use esp_idf_svc::hal::ledc::{
     LedcDriver, LedcTimerDriver, LowSpeed, Resolution, CHANNEL2, TIMER1,
 };
 use esp_idf_svc::hal::rmt::config::TransmitConfig;
-use esp_idf_svc::hal::rmt::{FixedLengthSignal, PinState, Pulse, RmtChannel, TxRmtDriver};
+use esp_idf_svc::hal::rmt::{
+    PinState, Pulse, RmtChannel, TxRmtDriver, VariableLengthSignal,
+};
 use esp_idf_svc::hal::sys::EspError;
 use esp_idf_svc::hal::units::Hertz;
 use log::warn;
 
+pub use smars_core::leds::Rgb;
+
 /// 状态灯颜色（GRB 顺序）
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Rgb(pub u8, pub u8, pub u8);
 
 pub const COLOR_OK: Rgb = Rgb(0, 32, 0); // 绿
 pub const COLOR_LOW: Rgb = Rgb(32, 20, 0); // 黄
@@ -27,7 +29,9 @@ pub const COLOR_CRITICAL: Rgb = Rgb(32, 0, 0); // 红
 pub const COLOR_ESTOP: Rgb = Rgb(32, 0, 16); // 紫
 pub const COLOR_LINK_DOWN: Rgb = Rgb(0, 8, 32); // 蓝
 
-/// WS2812 单灯驱动
+/// WS2812 灯带驱动：整条颜色帧发送（单灯即长度 1 的帧）。
+///
+/// 位时序：T0H=0.3µs/T0L=0.9µs，T1H=0.9µs/T1L=0.3µs，帧后 >50µs 复位。
 pub struct Ws2812<'d> {
     tx: TxRmtDriver<'d>,
     ticks_hz: Hertz,
@@ -41,34 +45,33 @@ impl<'d> Ws2812<'d> {
         Ok(Self { tx, ticks_hz })
     }
 
-    /// 写一帧 GRB 颜色
-    pub fn set_color(&mut self, rgb: Rgb) -> Result<(), EspError> {
-        let mut signal = FixedLengthSignal::<24>::new();
-        let bits: [u8; 3] = [rgb.1, rgb.0, rgb.2]; // WS2812 为 GRB
-        for (i, byte) in bits.iter().enumerate() {
-            for b in 0..8 {
-                let (t_on, t_off) = if byte & (0x80 >> b) != 0 {
-                    (900u64, 300u64) // T1H/T1L，ns
-                } else {
-                    (300u64, 900u64) // T0H/T0L，ns
-                };
-                let pair = (
-                    Pulse::new_with_duration(
+    /// 发送整条颜色帧（WS2812 线上为 GRB 顺序）
+    pub fn show(&mut self, colors: &[Rgb]) -> Result<(), EspError> {
+        let mut signal = VariableLengthSignal::with_capacity(colors.len() * 48);
+        for c in colors {
+            for byte in [c.1, c.0, c.2] {
+                for b in 0..8 {
+                    let (t_on, t_off) = if byte & (0x80 >> b) != 0 {
+                        (900u64, 300u64) // T1H/T1L，ns
+                    } else {
+                        (300u64, 900u64) // T0H/T0L，ns
+                    };
+                    let hi = Pulse::new_with_duration(
                         self.ticks_hz,
                         PinState::High,
                         &Duration::from_nanos(t_on),
-                    )?,
-                    Pulse::new_with_duration(
+                    )?;
+                    let lo = Pulse::new_with_duration(
                         self.ticks_hz,
                         PinState::Low,
                         &Duration::from_nanos(t_off),
-                    )?,
-                );
-                signal.set(i * 8 + b, &pair)?;
+                    )?;
+                    signal.push([&hi, &lo])?;
+                }
             }
         }
-        self.tx.start_blocking(&signal)?; // 单帧约 30 µs，阻塞发送完成
-        // 发送完成后留复位时间（>50µs）
+        self.tx.start_blocking(&signal)?;
+        // 帧后复位时间（>50µs）
         Ets::delay_us(60);
         Ok(())
     }

@@ -52,6 +52,10 @@ pub struct Shared {
     pub estop_pending: Option<bool>,
     /// 喇叭请求（buzz 特性，控制环转发给提示音线程）
     pub horn_requested: bool,
+    /// 灯带（ws2812 特性）：开关 / 效果（Effect::ALL 下标）/ 亮度 0..=100
+    pub light_on: bool,
+    pub light_effect: u8,
+    pub light_brightness: u8,
     pub battery_mv: u32,
     pub battery_pct: u8,
     pub sonar_cm: Option<u16>,
@@ -71,6 +75,9 @@ impl Default for Shared {
             estop: false,
             estop_pending: None,
             horn_requested: false,
+            light_on: true,
+            light_effect: 1, // 呼吸
+            light_brightness: 60,
             battery_mv: 0,
             battery_pct: 0,
             sonar_cm: None,
@@ -172,7 +179,8 @@ fn main() {
     let mut stc = StcLink::new(uart);
 
     info!("初始化完成，进入控制循环");
-    let _ = led.set_color(ui::COLOR_OK);
+    #[cfg(not(feature = "ws2812"))]
+    let _ = led.show(&[ui::COLOR_OK]);
 
     // ---- 控制循环 ----
     let mut fwd_slew = 0i32;
@@ -182,6 +190,8 @@ fn main() {
     let mut last_sonar = Instant::now();
     let mut last_bat = Instant::now();
     let mut sent_estop = false;
+    #[cfg(feature = "ws2812")]
+    let light_start = Instant::now();
 
     loop {
         // 取目标（网页线程写入）
@@ -232,7 +242,8 @@ fn main() {
                     turn = 0;
                     lift = 0;
                     info!("{}", if enter { "急停" } else { "恢复" });
-                    let _ = led.set_color(if enter { ui::COLOR_ESTOP } else { ui::COLOR_OK });
+                    #[cfg(not(feature = "ws2812"))]
+                    let _ = led.show(&[if enter { ui::COLOR_ESTOP } else { ui::COLOR_OK }]);
                 }
                 Err(e) => warn!("急停命令失败: {e}"),
             }
@@ -274,7 +285,8 @@ fn main() {
                     let mut s = shared.lock().unwrap_or_else(|e| e.into_inner());
                     if s.stc_ok {
                         warn!("STC 链路异常: {e}");
-                        let _ = led.set_color(ui::COLOR_LINK_DOWN);
+                        #[cfg(not(feature = "ws2812"))]
+                        let _ = led.show(&[ui::COLOR_LINK_DOWN]);
                     }
                     s.stc_ok = false;
                 }
@@ -298,14 +310,41 @@ fn main() {
                 s.battery_pct = pct;
                 drop(s);
                 if !sent_estop {
-                    let _ = led.set_color(match level {
+                    #[cfg(not(feature = "ws2812"))]
+                    let _ = led.show(&[match level {
                         smars_core::BatteryLevel::Ok => ui::COLOR_OK,
                         smars_core::BatteryLevel::Low => ui::COLOR_LOW,
                         smars_core::BatteryLevel::Critical => ui::COLOR_CRITICAL,
-                    });
+                    }]);
+                    #[cfg(feature = "ws2812")]
+                    let _ = level; // 灯带由效果引擎控制，状态色不抢灯
                 }
             }
             last_bat = Instant::now();
+        }
+
+        // 灯带效果（ws2812 特性）：每周期渲染并发送
+        #[cfg(feature = "ws2812")]
+        {
+            let (on, effect, brightness) = {
+                let s = shared.lock().unwrap_or_else(|e| e.into_inner());
+                (s.light_on, s.light_effect, s.light_brightness)
+            };
+            let mut frame = [smars_core::leds::Rgb(0, 0, 0); config::WS2812_COUNT];
+            if on {
+                let eff = *smars_core::leds::Effect::ALL
+                    .get(effect as usize)
+                    .unwrap_or(&smars_core::leds::Effect::Breath);
+                smars_core::leds::render(
+                    eff,
+                    light_start.elapsed().as_millis() as u32,
+                    brightness,
+                    &mut frame,
+                );
+            }
+            if let Err(e) = led.show(&frame) {
+                warn!("灯带发送失败: {e}");
+            }
         }
 
         std::thread::sleep(CONTROL_TICK);
